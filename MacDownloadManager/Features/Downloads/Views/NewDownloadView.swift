@@ -25,8 +25,10 @@ struct NewDownloadView: View {
                     .frame(width: 60, alignment: .trailing)
 
                 Picker("", selection: $viewModel.selectedDirectory) {
-                    Text(viewModel.selectedDirectory)
-                        .tag(viewModel.selectedDirectory)
+                    ForEach(viewModel.directoryOptions, id: \.self) { dir in
+                        Text(dir)
+                            .tag(dir)
+                    }
                 }
                 .labelsHidden()
 
@@ -96,7 +98,7 @@ struct NewDownloadView: View {
         panel.canCreateDirectories = true
         panel.directoryURL = URL(fileURLWithPath: viewModel.selectedDirectory)
         if panel.runModal() == .OK, let url = panel.url {
-            viewModel.selectedDirectory = url.path(percentEncoded: false)
+            viewModel.addBrowsedDirectory(url.path(percentEncoded: false))
         }
     }
 }

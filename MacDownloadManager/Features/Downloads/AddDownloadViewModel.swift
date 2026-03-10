@@ -43,6 +43,9 @@ final class AddDownloadViewModel {
         }
     }
 
+    /// Directory options for the Picker dropdown.
+    private(set) var directoryOptions: [String] = []
+
     /// Available disk space for the selected directory.
     private(set) var availableDiskSpace: Int64?
 
@@ -141,6 +144,7 @@ final class AddDownloadViewModel {
 
         // Transition to new download
         let dir = resolveDefaultDirectory()
+        directoryOptions = buildDirectoryOptions(defaultDir: dir)
         selectedDirectory = dir
         editableFilename = metadata.filename
         state = .newDownload(metadata)
@@ -242,6 +246,15 @@ final class AddDownloadViewModel {
         resetState()
     }
 
+    /// Adds a new directory option to the Picker dropdown and selects it.
+    func addBrowsedDirectory(_ path: String) {
+        guard !path.isEmpty else { return }
+        if !directoryOptions.contains(path) {
+            directoryOptions.append(path)
+        }
+        selectedDirectory = path
+    }
+
     // MARK: - Private
 
     private func resetState() {
@@ -249,9 +262,21 @@ final class AddDownloadViewModel {
         urlText = ""
         editableFilename = ""
         selectedDirectory = ""
+        directoryOptions = []
         resolvedMetadata = nil
         trimmedURLString = ""
         availableDiskSpace = nil
+    }
+
+    /// Builds the initial list of directory options, including the default dir and ~/Downloads.
+    private func buildDirectoryOptions(defaultDir: String) -> [String] {
+        var options: [String] = []
+        options.append(defaultDir)
+        let downloadsDir = URL.downloadsDirectory.path()
+        if downloadsDir != defaultDir {
+            options.append(downloadsDir)
+        }
+        return options
     }
 
     private func resolveDefaultDirectory() -> String {

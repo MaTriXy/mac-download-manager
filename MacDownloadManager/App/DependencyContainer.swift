@@ -18,6 +18,7 @@ final class DependencyContainer {
     let aria2Client: Aria2Client
     let processManager: Aria2ProcessManager
     let socketServer: SocketServer
+    let settingsViewModel: SettingsViewModel
 
     let aria2Secret: String
     let aria2Port: Int
@@ -40,6 +41,7 @@ final class DependencyContainer {
         aria2Client = Aria2Client(port: 6800, secret: aria2Secret)
         processManager = Aria2ProcessManager()
         socketServer = SocketServer()
+        settingsViewModel = SettingsViewModel(aria2: aria2Client)
     }
 
     init(inMemory: Bool) {
@@ -50,5 +52,6 @@ final class DependencyContainer {
         aria2Client = Aria2Client(port: 6800, secret: "test")
         processManager = Aria2ProcessManager()
         socketServer = SocketServer()
+        settingsViewModel = SettingsViewModel(aria2: aria2Client)
     }
 }

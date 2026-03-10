@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct DownloadListView: View {
     @Environment(DependencyContainer.self) private var container
     @State private var viewModel: DownloadListViewModel?
+    @State private var addDownloadViewModel: AddDownloadViewModel?
 
     private static let byteFormatter: ByteCountFormatter = {
         let f = ByteCountFormatter()
@@ -37,17 +38,21 @@ struct DownloadListView: View {
             get: { viewModel?.isAddURLPresented ?? false },
             set: { viewModel?.isAddURLPresented = $0 }
         )) {
-            AddDownloadDialog(
-                viewModel: AddDownloadViewModel(
+            if let addVM = addDownloadViewModel {
+                AddDownloadDialog(viewModel: addVM)
+            }
+        }
+        .onChange(of: viewModel?.isAddURLPresented) { oldValue, newValue in
+            if newValue == true, oldValue != true {
+                addDownloadViewModel = AddDownloadViewModel(
                     metadataService: DefaultURLMetadataService(),
                     repository: container.repository,
                     aria2: container.aria2Client,
-                    settings: SettingsViewModel()
+                    settings: container.settingsViewModel
                 )
-            )
-        }
-        .onChange(of: viewModel?.isAddURLPresented) { _, newValue in
-            if newValue == false {
+            } else if newValue == false, oldValue != false {
+                addDownloadViewModel?.cancel()
+                addDownloadViewModel = nil
                 Task { await viewModel?.loadDownloads() }
             }
         }
