@@ -8,3 +8,16 @@ enum Aria2Error: Error, Sendable {
     case requestFailed(statusCode: Int)
     case encodingFailed
 }
+
+extension Aria2Error: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .processNotRunning: "aria2c is not running"
+        case .connectionFailed(let e): "Connection to aria2c failed: \(e.localizedDescription)"
+        case .invalidResponse: "Invalid response from aria2c"
+        case .rpcError(_, let msg): msg
+        case .requestFailed(let s): "HTTP \(s) from aria2c"
+        case .encodingFailed: "Failed to encode request"
+        }
+    }
+}

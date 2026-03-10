@@ -14,6 +14,5 @@ struct SettingsView: View {
                 }
         }
         .tabViewStyle(.automatic)
-        .frame(width: 480, height: 360)
     }
 }

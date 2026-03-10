@@ -13,6 +13,8 @@ final class Aria2ProcessManager {
         downloadDir: String,
         maxConcurrent: Int
     ) throws {
+        killStaleProcesses()
+
         let binaryPath = Self.findBinary()
         guard let binaryPath else {
             throw Aria2Error.processNotRunning
@@ -29,13 +31,23 @@ final class Aria2ProcessManager {
             "--max-concurrent-downloads=\(maxConcurrent)",
             "--dir=\(downloadDir)",
             "--file-allocation=none",
-            "--auto-file-renaming=false"
+            "--auto-file-renaming=true"
         ]
         process.standardOutput = nil
         process.standardError = nil
 
         try process.run()
         self.process = process
+    }
+
+    private func killStaleProcesses() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        task.arguments = ["-f", "aria2c.*--enable-rpc"]
+        task.standardOutput = nil
+        task.standardError = nil
+        try? task.run()
+        task.waitUntilExit()
     }
 
     func terminate() {

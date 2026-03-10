@@ -5,6 +5,7 @@ protocol DownloadRepository: Sendable {
     func fetchActive() async throws -> [DownloadRecord]
     func fetch(id: UUID) async throws -> DownloadRecord?
     func fetchByGid(_ gid: String) async throws -> DownloadRecord?
+    func fetchByURL(_ url: String) async throws -> DownloadRecord?
     func save(_ record: DownloadRecord) async throws
     func update(_ record: DownloadRecord) async throws
     func delete(id: UUID) async throws
@@ -35,6 +36,10 @@ actor InMemoryDownloadRepository: DownloadRepository {
 
     func fetchByGid(_ gid: String) async throws -> DownloadRecord? {
         records.values.first { $0.aria2Gid == gid }
+    }
+
+    func fetchByURL(_ url: String) async throws -> DownloadRecord? {
+        records.values.first { $0.url == url }
     }
 
     func save(_ record: DownloadRecord) async throws {

@@ -14,65 +14,58 @@ struct AddURLSheet: View {
     let onSubmit: (URL, [String: String], String, Int) async -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section {
-                    HStack {
-                        TextField("URL", text: $urlString, prompt: Text("https://example.com/file.zip"))
-                            .textFieldStyle(.roundedBorder)
+        Form {
+            Section {
+                HStack {
+                    TextField("URL", text: $urlString, prompt: Text("https://example.com/file.zip"))
+                        .textFieldStyle(.roundedBorder)
 
-                        Button("Paste") {
-                            if let clip = NSPasteboard.general.string(forType: .string) {
-                                urlString = clip.trimmingCharacters(in: .whitespacesAndNewlines)
-                            }
+                    Button("Paste") {
+                        if let clip = NSPasteboard.general.string(forType: .string) {
+                            urlString = clip.trimmingCharacters(in: .whitespacesAndNewlines)
                         }
-                        .buttonStyle(.bordered)
                     }
-                }
-
-                Section("Custom Headers (one per line: Name: Value)") {
-                    TextEditor(text: $headersText)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(height: 80)
-                        .border(Color.secondary.opacity(0.2))
-                }
-
-                Section {
-                    HStack {
-                        TextField("Download Directory", text: $downloadDirectory)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button("Browse...") {
-                            chooseDirectory()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    Stepper("Segments: \(segments)", value: $segments, in: 1...32)
-                }
-
-                if let error = validationError {
-                    Text(error)
-                        .foregroundStyle(.red)
-                        .font(.caption)
+                    .buttonStyle(.bordered)
                 }
             }
-            .formStyle(.grouped)
-            .padding()
 
-            Divider()
+            Section("Custom Headers (one per line: Name: Value)") {
+                TextEditor(text: $headersText)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(height: 80)
+            }
 
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
+            Section {
+                HStack {
+                    TextField("Download Directory", text: $downloadDirectory)
+                        .textFieldStyle(.roundedBorder)
+
+                    Button("Browse...") {
+                        chooseDirectory()
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Stepper("Segments: \(segments)", value: $segments, in: 1...32)
+            }
+
+            if let error = validationError {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 500)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
                 Button("Download") { submit() }
-                    .keyboardShortcut(.defaultAction)
                     .disabled(urlString.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .padding()
         }
-        .frame(width: 500)
     }
 
     private func submit() {

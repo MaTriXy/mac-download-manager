@@ -24,50 +24,52 @@ struct HistoryView: View {
     @ViewBuilder
     private func historyContent(_ viewModel: HistoryViewModel) -> some View {
         @Bindable var vm = viewModel
-        if viewModel.filteredRecords.isEmpty {
-            ContentUnavailableView(
-                "No History",
-                systemImage: "clock.arrow.circlepath",
-                description: Text(viewModel.searchText.isEmpty
-                    ? "Completed downloads will appear here."
-                    : "No results for \"\(viewModel.searchText)\".")
-            )
-            .toolbar { toolbarContent(viewModel) }
-        } else {
-            Table(viewModel.filteredRecords, selection: $selection) {
-                TableColumn("Filename") { item in
-                    HStack(spacing: 6) {
-                        Image(systemName: iconForStatus(item.status))
-                            .foregroundStyle(colorForStatus(item.status))
-                        Text(item.filename)
-                            .lineLimit(1)
+        Group {
+            if viewModel.filteredRecords.isEmpty {
+                ContentUnavailableView(
+                    "No History",
+                    systemImage: "clock.arrow.circlepath",
+                    description: Text(viewModel.searchText.isEmpty
+                        ? "Completed downloads will appear here."
+                        : "No results for \"\(viewModel.searchText)\".")
+                )
+            } else {
+                Table(viewModel.filteredRecords, selection: $selection) {
+                    TableColumn("Filename") { item in
+                        HStack(spacing: 6) {
+                            Image(systemName: iconForStatus(item.status))
+                                .foregroundStyle(colorForStatus(item.status))
+                            Text(item.filename)
+                                .lineLimit(1)
+                        }
                     }
-                }
-                .width(min: 200)
+                    .width(min: 200)
 
-                TableColumn("Size") { item in
-                    Text(formattedSize(item.fileSize))
-                }
-                .width(min: 80, ideal: 100)
+                    TableColumn("Size") { item in
+                        Text(formattedSize(item.fileSize))
+                    }
+                    .width(min: 80, ideal: 100)
 
-                TableColumn("Date") { item in
-                    Text(formattedDate(item.completedAt ?? item.createdAt))
-                }
-                .width(min: 100, ideal: 140)
+                    TableColumn("Date") { item in
+                        Text(formattedDate(item.completedAt ?? item.createdAt))
+                    }
+                    .width(min: 100, ideal: 140)
 
-                TableColumn("Status") { item in
-                    Text(item.status.rawValue.capitalized)
+                    TableColumn("Status") { item in
+                        Text(item.status.rawValue.capitalized)
+                    }
+                    .width(min: 80, ideal: 100)
                 }
-                .width(min: 80, ideal: 100)
+                .contextMenu(forSelectionType: DownloadItem.ID.self) { ids in
+                    if let id = ids.first,
+                       let item = viewModel.filteredRecords.first(where: { $0.id == id }) {
+                        contextMenuItems(for: item, viewModel: viewModel)
+                    }
+                } primaryAction: { _ in }
             }
-            .contextMenu(forSelectionType: DownloadItem.ID.self) { ids in
-                if let id = ids.first,
-                   let item = viewModel.filteredRecords.first(where: { $0.id == id }) {
-                    contextMenuItems(for: item, viewModel: viewModel)
-                }
-            } primaryAction: { _ in }
-            .toolbar { toolbarContent(viewModel) }
         }
+        .searchable(text: $vm.searchText, prompt: "Search history")
+        .toolbar { toolbarContent(viewModel) }
     }
 
     @ViewBuilder
@@ -114,12 +116,6 @@ struct HistoryView: View {
             } message: {
                 Text("This will remove all non-active downloads from history. This action cannot be undone.")
             }
-        }
-
-        ToolbarItem(placement: .automatic) {
-            TextField("Search history...", text: $vm.searchText)
-                .textFieldStyle(.roundedBorder)
-                .frame(minWidth: 180)
         }
     }
 

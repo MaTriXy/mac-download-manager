@@ -96,6 +96,10 @@ struct AnyCodable: Encodable, Sendable {
         AnyCodable { try $0.encode(value) }
     }
 
+    static func mixedDict(_ value: [String: AnyCodable]) -> AnyCodable {
+        AnyCodable { try $0.encode(value) }
+    }
+
     static func array(_ value: [AnyCodable]) -> AnyCodable {
         AnyCodable { try $0.encode(value) }
     }

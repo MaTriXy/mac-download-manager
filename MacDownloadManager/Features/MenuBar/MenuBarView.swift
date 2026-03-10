@@ -42,7 +42,7 @@ struct MenuBarView: View {
     private func speedHeader(_ viewModel: MenuBarViewModel) -> some View {
         HStack {
             Image(systemName: "arrow.down.circle.fill")
-                .foregroundStyle(.blue)
+                .foregroundStyle(.tint)
             Text(formattedSpeed(viewModel.globalSpeed))
                 .font(.headline)
             Spacer()

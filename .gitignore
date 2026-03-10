@@ -7,3 +7,6 @@ DerivedData/
 Pods/
 *.resolved
 .DS_Store
+*.app
+run.sh
+scripts/.cache/

@@ -75,13 +75,8 @@ struct DownloadRowView: View {
 
     private var statusBadge: some View {
         Text(statusLabel)
-            .font(.caption2)
-            .fontWeight(.medium)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(statusColor.opacity(0.15))
-            .foregroundStyle(statusColor)
-            .clipShape(Capsule())
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 
     private var statusLabel: String {
@@ -92,17 +87,6 @@ struct DownloadRowView: View {
         case .completed: "Completed"
         case .error: "Error"
         case .removed: "Removed"
-        }
-    }
-
-    private var statusColor: Color {
-        switch item.status {
-        case .waiting: .orange
-        case .downloading: .blue
-        case .paused: .yellow
-        case .completed: .green
-        case .error: .red
-        case .removed: .gray
         }
     }
 

@@ -48,6 +48,14 @@ targets:
           cp "${BUILT_PRODUCTS_DIR}/NativeMessagingHelper" "${BUILT_PRODUCTS_DIR}/Mac Download Manager.app/Contents/MacOS/"
         name: Copy Native Messaging Helper
         basedOnDependencyAnalysis: false
+      - script: |
+          "${PROJECT_DIR}/scripts/build-aria2.sh"
+          DEST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Resources/aria2c"
+          cp "${PROJECT_DIR}/scripts/.cache/aria2c" "$DEST"
+          chmod +x "$DEST"
+          codesign --force --sign - "$DEST"
+        name: Bundle aria2c
+        basedOnDependencyAnalysis: false
 
   NativeMessagingHelper:
     type: tool

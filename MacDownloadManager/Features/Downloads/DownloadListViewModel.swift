@@ -12,6 +12,8 @@ final class DownloadListViewModel {
     var errorMessage: String?
     var isAddURLPresented = false
     var selectedDownloadIDs: Set<UUID> = []
+    var pendingDuplicate: DownloadItem?
+    private var pendingDownloadParams: (url: URL, headers: [String: String], directory: String, segments: Int)?
 
     var filteredDownloads: [DownloadItem] {
         var items = downloads
@@ -47,6 +49,35 @@ final class DownloadListViewModel {
     }
 
     func addDownload(url: URL, headers: [String: String], directory: String, segments: Int) async {
+        do {
+            if let existing = try await repository.fetchByURL(url.absoluteString) {
+                pendingDuplicate = DownloadItem(record: existing)
+                pendingDownloadParams = (url, headers, directory, segments)
+                return
+            }
+        } catch {
+            // proceed with download if lookup fails
+        }
+
+        await performDownload(url: url, headers: headers, directory: directory, segments: segments)
+    }
+
+    func confirmDuplicate() {
+        guard let params = pendingDownloadParams else { return }
+        pendingDuplicate = nil
+        let captured = params
+        pendingDownloadParams = nil
+        Task {
+            await performDownload(url: captured.url, headers: captured.headers, directory: captured.directory, segments: captured.segments)
+        }
+    }
+
+    func cancelDuplicate() {
+        pendingDuplicate = nil
+        pendingDownloadParams = nil
+    }
+
+    private func performDownload(url: URL, headers: [String: String], directory: String, segments: Int) async {
         do {
             let gid = try await aria2.addDownload(
                 url: url,
@@ -98,10 +129,14 @@ final class DownloadListViewModel {
     }
 
     func removeDownload(_ item: DownloadItem) async {
-        do {
-            if let gid = item.aria2Gid, item.isActive {
-                try await aria2.forceRemove(gid: gid)
+        if let gid = item.aria2Gid {
+            if item.isActive {
+                try? await aria2.forceRemove(gid: gid)
             }
+            try? await aria2.removeDownloadResult(gid: gid)
+        }
+
+        do {
             try await repository.delete(id: item.id)
             downloads.removeAll { $0.id == item.id }
             selectedDownloadIDs.remove(item.id)

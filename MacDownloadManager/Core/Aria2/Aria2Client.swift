@@ -18,27 +18,26 @@ actor Aria2Client {
         dir: String,
         segments: Int = 16
     ) async throws(Aria2Error) -> String {
-        var options: [String: String] = [
-            "split": "\(segments)",
-            "max-connection-per-server": "\(segments)",
-            "dir": dir
+        var options: [String: AnyCodable] = [
+            "split": .string("\(segments)"),
+            "max-connection-per-server": .string("\(segments)"),
+            "dir": .string(dir)
         ]
 
         if let filename = extractFilename(from: url) {
-            options["out"] = filename
+            options["out"] = .string(filename)
         }
-
-        var params: [AnyCodable] = [
-            .string(tokenParam),
-            .stringArray([url.absoluteString])
-        ]
 
         if !headers.isEmpty {
             let headerStrings = headers.map { "\($0.key): \($0.value)" }
-            options["header"] = headerStrings.joined(separator: "\n")
+            options["header"] = .stringArray(headerStrings)
         }
 
-        params.append(.dict(options))
+        let params: [AnyCodable] = [
+            .string(tokenParam),
+            .stringArray([url.absoluteString]),
+            .mixedDict(options)
+        ]
 
         return try await call(method: "aria2.addUri", params: params)
     }
@@ -67,6 +66,13 @@ actor Aria2Client {
     func forceRemove(gid: String) async throws(Aria2Error) {
         let _: String = try await call(
             method: "aria2.forceRemove",
+            params: [tokenParam, gid]
+        )
+    }
+
+    func removeDownloadResult(gid: String) async throws(Aria2Error) {
+        let _: String = try await call(
+            method: "aria2.removeDownloadResult",
             params: [tokenParam, gid]
         )
     }

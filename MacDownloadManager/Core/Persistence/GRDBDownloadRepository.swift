@@ -40,6 +40,14 @@ struct GRDBDownloadRepository: DownloadRepository {
         }
     }
 
+    func fetchByURL(_ url: String) async throws -> DownloadRecord? {
+        try await dbQueue.read { db in
+            try DownloadRecord
+                .filter(Column("url") == url)
+                .fetchOne(db)
+        }
+    }
+
     func save(_ record: DownloadRecord) async throws {
         try await dbQueue.write { db in
             try record.insert(db)

@@ -18,6 +18,13 @@ struct DownloadListView: View {
             viewModel = vm
             await vm.loadDownloads()
         }
+        .task(id: "polling") {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { break }
+                await viewModel?.updateFromAria2()
+            }
+        }
         .sheet(isPresented: Binding(
             get: { viewModel?.isAddURLPresented ?? false },
             set: { viewModel?.isAddURLPresented = $0 }
@@ -44,6 +51,19 @@ struct DownloadListView: View {
             Button("OK", role: .cancel) {}
         } message: { message in
             Text(message)
+        }
+        .alert(
+            "Download Already Exists",
+            isPresented: Binding(
+                get: { viewModel?.pendingDuplicate != nil },
+                set: { if !$0 { viewModel?.cancelDuplicate() } }
+            ),
+            presenting: viewModel?.pendingDuplicate
+        ) { _ in
+            Button("Skip", role: .cancel) { viewModel?.cancelDuplicate() }
+            Button("Download") { viewModel?.confirmDuplicate() }
+        } message: { item in
+            Text(duplicateMessage(for: item))
         }
     }
 
@@ -179,6 +199,20 @@ struct DownloadListView: View {
             return nil
         }
         return vm.filteredDownloads.first { $0.id == id }
+    }
+
+    private func duplicateMessage(for item: DownloadItem) -> String {
+        var lines: [String] = []
+        let urlString = item.url.absoluteString
+        lines.append(urlString.count > 80 ? String(urlString.prefix(77)) + "..." : urlString)
+        if let path = item.filePath {
+            lines.append("Location: \(path)")
+        }
+        if let size = item.fileSize, size > 0 {
+            lines.append("Size: \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))")
+        }
+        lines.append("Added: \(item.createdAt.formatted(date: .abbreviated, time: .shortened))")
+        return lines.joined(separator: "\n")
     }
 
     private func iconForFilter(_ option: FilterOption) -> String {
