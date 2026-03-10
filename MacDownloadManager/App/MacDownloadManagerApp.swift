@@ -1,0 +1,35 @@
+import SwiftUI
+
+@main
+struct MacDownloadManagerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var container: DependencyContainer
+
+    init() {
+        let container = DependencyContainer()
+        DependencyContainer.shared = container
+        _container = State(initialValue: container)
+    }
+
+    var body: some Scene {
+        Window("Mac Download Manager", id: "main") {
+            DownloadListView()
+                .environment(container)
+        }
+        .defaultSize(width: 700, height: 500)
+
+        MenuBarExtra {
+            MenuBarView()
+                .environment(container)
+                .frame(width: 320, height: 400)
+        } label: {
+            Label("Downloads", systemImage: container.menuBarIcon)
+        }
+        .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
+                .environment(container)
+        }
+    }
+}

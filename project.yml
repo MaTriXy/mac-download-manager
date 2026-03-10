@@ -1,0 +1,76 @@
+name: MacDownloadManager
+options:
+  bundleIdPrefix: com.macdownloadmanager
+  deploymentTarget:
+    macOS: "14.0"
+  minimumXcodeGenVersion: "2.40.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "7.4.1"
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.7.0"
+
+targets:
+  MacDownloadManager:
+    type: application
+    platform: macOS
+    sources:
+      - path: MacDownloadManager
+    resources:
+      - path: MacDownloadManager/Resources/Assets.xcassets
+    dependencies:
+      - package: GRDB
+      - package: Sparkle
+      - target: NativeMessagingHelper
+        embed: false
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: MacDownloadManager/MacDownloadManager.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.macdownloadmanager.app
+        PRODUCT_NAME: Mac Download Manager
+        INFOPLIST_KEY_CFBundleDisplayName: Mac Download Manager
+        INFOPLIST_KEY_LSUIElement: false
+        GENERATE_INFOPLIST_FILE: true
+        CODE_SIGN_IDENTITY: "-"
+    postCompileScripts:
+      - script: |
+          cp "${BUILT_PRODUCTS_DIR}/NativeMessagingHelper" "${BUILT_PRODUCTS_DIR}/Mac Download Manager.app/Contents/MacOS/"
+        name: Copy Native Messaging Helper
+        basedOnDependencyAnalysis: false
+
+  NativeMessagingHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: NativeMessagingHelper
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macdownloadmanager.helper
+        PRODUCT_NAME: NativeMessagingHelper
+        GENERATE_INFOPLIST_FILE: true
+        CODE_SIGN_IDENTITY: "-"
+
+  MacDownloadManagerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: MacDownloadManager
+      - package: GRDB
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Mac Download Manager.app/Contents/MacOS/Mac Download Manager"
+        BUNDLE_LOADER: "$(TEST_HOST)"
