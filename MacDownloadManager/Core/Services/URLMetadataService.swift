@@ -134,8 +134,12 @@ final class DefaultURLMetadataService: URLMetadataService {
     }
 
     private func sanitizeFilename(_ name: String) -> String {
+        // Normalize backslash separators to forward slashes so NSString.lastPathComponent
+        // correctly handles Windows-style paths like '..\..\secret.txt'
+        let normalized = name.replacingOccurrences(of: "\\", with: "/")
+
         // Take only the last path component to strip directory paths
-        let basename = (name as NSString).lastPathComponent
+        let basename = (normalized as NSString).lastPathComponent
 
         // Remove path traversal components
         let cleaned = basename

@@ -257,6 +257,19 @@ struct URLMetadataServiceTests {
     }
 
     @Test
+    func sanitizesBackslashPathTraversal() async {
+        let url = URL(string: "https://example.com/download")!
+        let client = makeClient(url: url, headers: [
+            "Content-Disposition": "attachment; filename=\"..\\..\\secret.txt\""
+        ])
+        let service = DefaultURLMetadataService(client: client)
+        let metadata = await service.fetchMetadata(for: url)
+        #expect(!metadata.filename.contains("\\"))
+        #expect(!metadata.filename.contains(".."))
+        #expect(metadata.filename == "secret.txt")
+    }
+
+    @Test
     func fallsBackToDownloadForEmptyFilename() async {
         let url = URL(string: "https://example.com/")!
         let client = makeClient(url: url, headers: [

@@ -55,7 +55,9 @@ final class AddDownloadViewModel {
     /// Whether the DOWNLOAD button should be enabled in new download state.
     var isDownloadEnabled: Bool {
         guard case .newDownload = state else { return false }
-        return isValidFilename(editableFilename) && !selectedDirectory.isEmpty
+        return isValidFilename(editableFilename)
+            && !selectedDirectory.isEmpty
+            && fileManager.isWritableFile(atPath: selectedDirectory)
     }
 
     // MARK: - Dependencies
@@ -65,6 +67,7 @@ final class AddDownloadViewModel {
     private let aria2: any DownloadManagingAria2
     private let settings: SettingsViewModel
     private let diskSpaceProvider: any DiskSpaceProviding
+    private let fileManager: FileManager
 
     /// Tracks the current query task for cancellation.
     private var currentQueryTask: Task<Void, Never>?
@@ -85,13 +88,15 @@ final class AddDownloadViewModel {
         repository: any DownloadRepository,
         aria2: any DownloadManagingAria2,
         settings: SettingsViewModel,
-        diskSpaceProvider: any DiskSpaceProviding = SystemDiskSpaceProvider()
+        diskSpaceProvider: any DiskSpaceProviding = SystemDiskSpaceProvider(),
+        fileManager: FileManager = .default
     ) {
         self.metadataService = metadataService
         self.repository = repository
         self.aria2 = aria2
         self.settings = settings
         self.diskSpaceProvider = diskSpaceProvider
+        self.fileManager = fileManager
     }
 
     // MARK: - Actions
@@ -201,6 +206,7 @@ final class AddDownloadViewModel {
 
         let sanitizedFilename = sanitizeFilename(editableFilename)
         guard !sanitizedFilename.isEmpty, !selectedDirectory.isEmpty else { return }
+        guard fileManager.isWritableFile(atPath: selectedDirectory) else { return }
         guard let url = URL(string: trimmedURLString) else {
             resetState()
             return
@@ -253,6 +259,10 @@ final class AddDownloadViewModel {
         if dir.isEmpty {
             return URL.downloadsDirectory.path()
         }
+        // Verify the stored directory actually exists on disk; fall back to ~/Downloads if stale/invalid
+        if !fileManager.fileExists(atPath: dir) {
+            return URL.downloadsDirectory.path()
+        }
         return dir
     }
 
@@ -264,13 +274,15 @@ final class AddDownloadViewModel {
         availableDiskSpace = diskSpaceProvider.availableDiskSpace(at: selectedDirectory)
     }
 
-    /// Validates that the given string is a valid http/https URL.
+    /// Validates that the given string is a valid http/https URL with a non-empty host.
     private func isValidHTTPURL(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         guard let url = URL(string: trimmed) else { return false }
         let scheme = url.scheme?.lowercased()
-        return scheme == "http" || scheme == "https"
+        guard scheme == "http" || scheme == "https" else { return false }
+        guard let host = url.host, !host.isEmpty else { return false }
+        return true
     }
 
     /// Validates a filename is non-empty, has no path separators, and no traversal.

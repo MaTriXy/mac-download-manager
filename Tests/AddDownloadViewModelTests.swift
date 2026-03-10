@@ -137,6 +137,20 @@ struct AddDownloadViewModelTests {
     }
 
     @Test @MainActor
+    func schemeOnlyHTTPSURLDisablesOK() {
+        let (vm, _, _) = makeViewModel()
+        vm.urlText = "https://"
+        #expect(vm.isOKEnabled == false)
+    }
+
+    @Test @MainActor
+    func schemeOnlyHTTPURLDisablesOK() {
+        let (vm, _, _) = makeViewModel()
+        vm.urlText = "http://"
+        #expect(vm.isOKEnabled == false)
+    }
+
+    @Test @MainActor
     func malformedURLDisablesOK() {
         let (vm, _, _) = makeViewModel()
         vm.urlText = "not a url at all"
@@ -460,7 +474,7 @@ struct AddDownloadViewModelTests {
             metadataService: metaService,
             repository: repo,
             aria2: aria2,
-            defaultDownloadDir: "/tmp/downloads"
+            defaultDownloadDir: NSTemporaryDirectory()
         )
         vm.urlText = "https://example.com/file.zip"
 
@@ -585,13 +599,28 @@ struct AddDownloadViewModelTests {
         let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
         let (vm, _, _) = makeViewModel(
             metadataService: metaService,
-            defaultDownloadDir: "/custom/downloads"
+            defaultDownloadDir: NSTemporaryDirectory()
         )
         vm.urlText = "https://example.com/file.zip"
 
         await vm.submitURL()
 
-        #expect(vm.selectedDirectory == "/custom/downloads")
+        #expect(vm.selectedDirectory == NSTemporaryDirectory())
+    }
+
+    @Test @MainActor
+    func fallsBackToDownloadsDirectoryWhenSettingsPathDoesNotExist() async {
+        let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
+        let (vm, _, _) = makeViewModel(
+            metadataService: metaService,
+            defaultDownloadDir: "/nonexistent/stale/path/that/does/not/exist"
+        )
+        vm.urlText = "https://example.com/file.zip"
+
+        await vm.submitURL()
+
+        let expectedDir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!.path()
+        #expect(vm.selectedDirectory == expectedDir)
     }
 
     @Test @MainActor
@@ -669,12 +698,13 @@ struct AddDownloadViewModelTests {
 
     @Test @MainActor
     func downloadInitiatesAria2AndSavesRecord() async throws {
+        let tmpDir = NSTemporaryDirectory()
         let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
         let aria2 = MockAria2Controller(addResult: "new-gid-123")
         let (vm, repo, _) = makeViewModel(
             metadataService: metaService,
             aria2: aria2,
-            defaultDownloadDir: "/tmp/downloads"
+            defaultDownloadDir: tmpDir
         )
         vm.urlText = "https://example.com/file.zip"
 
@@ -698,7 +728,7 @@ struct AddDownloadViewModelTests {
         #expect(addCalls.count == 1)
         let call = try #require(addCalls.first)
         #expect(call.url == URL(string: "https://example.com/file.zip"))
-        #expect(call.dir == "/tmp/downloads")
+        #expect(call.dir == tmpDir)
         #expect(call.outputFileName == "file.zip")
 
         // Record was saved
@@ -707,38 +737,39 @@ struct AddDownloadViewModelTests {
         let saved = try #require(all.first)
         #expect(saved.url == "https://example.com/file.zip")
         #expect(saved.filename == "file.zip")
-        #expect(saved.filePath == "/tmp/downloads")
+        #expect(saved.filePath == tmpDir)
         #expect(saved.aria2Gid == "new-gid-123")
     }
 
     @Test @MainActor
     func downloadWithCustomFilenameAndDirectory() async throws {
+        let tmpDir = NSTemporaryDirectory()
         let metaService = MockURLMetadataService(filename: "original.zip", fileSize: 1024)
         let aria2 = MockAria2Controller(addResult: "custom-gid")
         let (vm, repo, _) = makeViewModel(
             metadataService: metaService,
             aria2: aria2,
-            defaultDownloadDir: "/tmp/downloads"
+            defaultDownloadDir: tmpDir
         )
         vm.urlText = "https://example.com/original.zip"
 
         await vm.submitURL()
 
         vm.editableFilename = "renamed.zip"
-        vm.selectedDirectory = "/other/dir"
+        vm.selectedDirectory = tmpDir
 
         await vm.startDownload()
 
         let addCalls = await aria2.recordedAddCalls()
         #expect(addCalls.count == 1)
         let call = try #require(addCalls.first)
-        #expect(call.dir == "/other/dir")
+        #expect(call.dir == tmpDir)
         #expect(call.outputFileName == "renamed.zip")
 
         let all = try await repo.fetchAll()
         let saved = try #require(all.first)
         #expect(saved.filename == "renamed.zip")
-        #expect(saved.filePath == "/other/dir")
+        #expect(saved.filePath == tmpDir)
     }
 
     // MARK: VAL-NEW-008: Directory change updates disk space
@@ -792,6 +823,42 @@ struct AddDownloadViewModelTests {
     // MARK: VAL-NEW-011: Invalid directory validation
 
     @Test @MainActor
+    func unwritableDirectoryDisablesDownload() async {
+        let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
+        let (vm, _, _) = makeViewModel(metadataService: metaService)
+        vm.urlText = "https://example.com/file.zip"
+
+        await vm.submitURL()
+
+        // /usr/bin exists but is not writable by normal users
+        vm.selectedDirectory = "/usr/bin"
+        #expect(vm.isDownloadEnabled == false)
+    }
+
+    @Test @MainActor
+    func unwritableDirectoryBlocksStartDownload() async {
+        let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
+        let aria2 = MockAria2Controller(addResult: "test-gid")
+        let (vm, repo, _) = makeViewModel(metadataService: metaService, aria2: aria2)
+        vm.urlText = "https://example.com/file.zip"
+
+        await vm.submitURL()
+
+        // Force directory to an unwritable path
+        vm.selectedDirectory = "/usr/bin"
+
+        await vm.startDownload()
+
+        // aria2 should NOT have been called
+        let addCalls = await aria2.recordedAddCalls()
+        #expect(addCalls.isEmpty)
+
+        // No record saved
+        let all = try! await repo.fetchAll()
+        #expect(all.isEmpty)
+    }
+
+    @Test @MainActor
     func emptyDirectoryDisablesDownload() async {
         let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
         let (vm, _, _) = makeViewModel(metadataService: metaService)
@@ -807,13 +874,14 @@ struct AddDownloadViewModelTests {
 
     @Test @MainActor
     func fullNewDownloadFlow() async throws {
+        let tmpDir = NSTemporaryDirectory()
         let metaService = MockURLMetadataService(filename: "app.dmg", fileSize: 50_000_000)
         let aria2 = MockAria2Controller(addResult: "cross-gid")
         let dsp = FixedDiskSpaceProvider(availableSpace: 100_000_000_000)
         let (vm, repo, _) = makeViewModel(
             metadataService: metaService,
             aria2: aria2,
-            defaultDownloadDir: "/tmp/downloads",
+            defaultDownloadDir: tmpDir,
             diskSpaceProvider: dsp
         )
 
@@ -832,7 +900,7 @@ struct AddDownloadViewModelTests {
         #expect(metadata.filename == "app.dmg")
         #expect(metadata.fileSize == 50_000_000)
         #expect(vm.editableFilename == "app.dmg")
-        #expect(vm.selectedDirectory == "/tmp/downloads")
+        #expect(vm.selectedDirectory == tmpDir)
         #expect(vm.availableDiskSpace == 100_000_000_000)
 
         // Step 4: Download
@@ -921,7 +989,7 @@ struct AddDownloadViewModelTests {
             metadataService: metaService,
             repository: repo,
             aria2: aria2,
-            defaultDownloadDir: "/tmp/downloads"
+            defaultDownloadDir: NSTemporaryDirectory()
         )
 
         vm.urlText = "https://example.com/dup.zip"
@@ -956,13 +1024,14 @@ struct AddDownloadViewModelTests {
 
     @Test @MainActor
     func headFailureFallbackFlow() async throws {
+        let tmpDir = NSTemporaryDirectory()
         // URLMetadataService returns fallback on error (filename from URL, nil size)
         let metaService = MockURLMetadataService(filename: "large.iso", fileSize: nil)
         let aria2 = MockAria2Controller(addResult: "fallback-gid")
         let (vm, repo, _) = makeViewModel(
             metadataService: metaService,
             aria2: aria2,
-            defaultDownloadDir: "/tmp/downloads"
+            defaultDownloadDir: tmpDir
         )
 
         vm.urlText = "https://example.com/files/large.iso"
@@ -1035,7 +1104,7 @@ struct AddDownloadViewModelTests {
         let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
         let (vm, _, _) = makeViewModel(
             metadataService: metaService,
-            defaultDownloadDir: "/tmp/downloads"
+            defaultDownloadDir: NSTemporaryDirectory()
         )
         vm.urlText = "https://example.com/file.zip"
 
@@ -1055,7 +1124,7 @@ struct AddDownloadViewModelTests {
         let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
         let (vm, _, _) = makeViewModel(
             metadataService: metaService,
-            defaultDownloadDir: "/tmp/downloads"
+            defaultDownloadDir: NSTemporaryDirectory()
         )
 
         // Complete a download
@@ -1094,7 +1163,7 @@ struct AddDownloadViewModelTests {
         let aria2 = MockAria2Controller(addResult: "test-gid")
         let settings = SettingsViewModel()
         settings.defaultSegments = 16
-        settings.defaultDownloadDir = "/tmp/downloads"
+        settings.defaultDownloadDir = NSTemporaryDirectory()
 
         let repo = InMemoryDownloadRepository()
         let vm = AddDownloadViewModel(
