@@ -1,6 +1,24 @@
 import Foundation
 
-actor Aria2Client {
+protocol DownloadManagingAria2: Actor {
+    func addDownload(
+        url: URL,
+        headers: [String: String],
+        dir: String,
+        segments: Int,
+        outputFileName: String?
+    ) async throws(Aria2Error) -> String
+    func pause(gid: String) async throws(Aria2Error)
+    func pauseAll() async throws(Aria2Error)
+    func resume(gid: String) async throws(Aria2Error)
+    func forceRemove(gid: String) async throws(Aria2Error)
+    func removeDownloadResult(gid: String) async throws(Aria2Error)
+    func tellActive() async throws(Aria2Error) -> [Aria2Status]
+    func tellWaiting(offset: Int, count: Int) async throws(Aria2Error) -> [Aria2Status]
+    func tellStopped(offset: Int, count: Int) async throws(Aria2Error) -> [Aria2Status]
+}
+
+actor Aria2Client: DownloadManagingAria2 {
     private let baseURL: URL
     private let secret: String
     private let session: URLSession
@@ -16,7 +34,8 @@ actor Aria2Client {
         url: URL,
         headers: [String: String] = [:],
         dir: String,
-        segments: Int = 16
+        segments: Int = 16,
+        outputFileName: String? = nil
     ) async throws(Aria2Error) -> String {
         var options: [String: AnyCodable] = [
             "split": .string("\(segments)"),
@@ -24,7 +43,7 @@ actor Aria2Client {
             "dir": .string(dir)
         ]
 
-        if let filename = extractFilename(from: url) {
+        if let filename = outputFileName ?? extractFilename(from: url) {
             options["out"] = .string(filename)
         }
 
@@ -44,8 +63,15 @@ actor Aria2Client {
 
     func pause(gid: String) async throws(Aria2Error) {
         let _: String = try await call(
-            method: "aria2.pause",
+            method: "aria2.forcePause",
             params: [tokenParam, gid]
+        )
+    }
+
+    func pauseAll() async throws(Aria2Error) {
+        let _: String = try await call(
+            method: "aria2.forcePauseAll",
+            params: [tokenParam]
         )
     }
 
@@ -169,8 +195,8 @@ actor Aria2Client {
     }
 
     private func extractFilename(from url: URL) -> String? {
-        let lastComponent = url.lastPathComponent
-        guard !lastComponent.isEmpty, lastComponent != "/" else { return nil }
-        return lastComponent
+        let name = url.suggestedFilename
+        guard name != "download" else { return nil }
+        return name
     }
 }

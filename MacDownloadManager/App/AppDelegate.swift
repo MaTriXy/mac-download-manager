@@ -17,6 +17,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startPolling()
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard container.activeDownloadCount > 0 else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = "Downloads are active"
+        alert.informativeText = "Quitting will pause all active downloads. Quit anyway?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+
+        Task {
+            try? await container.aria2Client.pauseAll()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         pollingTask?.cancel()
         container.processManager.terminate()
@@ -80,7 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 url: url,
                 headers: headers,
                 dir: downloadDir,
-                segments: 16
+                segments: 16,
+                outputFileName: filename
             )
 
             var headersJSON: String?

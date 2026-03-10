@@ -4,7 +4,7 @@ import Foundation
 @Observable @MainActor
 final class DownloadListViewModel {
     private let repository: any DownloadRepository
-    private let aria2: Aria2Client
+    private let aria2: any DownloadManagingAria2
 
     var downloads: [DownloadItem] = []
     var searchText = ""
@@ -34,7 +34,7 @@ final class DownloadListViewModel {
         return items
     }
 
-    init(repository: any DownloadRepository, aria2: Aria2Client) {
+    init(repository: any DownloadRepository, aria2: any DownloadManagingAria2) {
         self.repository = repository
         self.aria2 = aria2
     }
@@ -45,7 +45,10 @@ final class DownloadListViewModel {
             downloads = records.map { DownloadItem(record: $0) }
         } catch {
             errorMessage = "Failed to load downloads: \(error.localizedDescription)"
+            return
         }
+
+        await reconcilePersistedDownloadsWithAria2()
     }
 
     func addDownload(url: URL, headers: [String: String], directory: String, segments: Int) async {
@@ -83,7 +86,8 @@ final class DownloadListViewModel {
                 url: url,
                 headers: headers,
                 dir: directory,
-                segments: segments
+                segments: segments,
+                outputFileName: url.suggestedFilename
             )
 
             var headersJSON: String?
@@ -109,20 +113,46 @@ final class DownloadListViewModel {
     }
 
     func pauseDownload(_ item: DownloadItem) async {
-        guard let gid = item.aria2Gid else { return }
+        guard let gid = item.aria2Gid else {
+            await updateItem(id: item.id) {
+                $0.status = .paused
+                $0.speed = 0
+            }
+            return
+        }
         do {
             try await aria2.pause(gid: gid)
-            updateItemLocally(id: item.id) { $0.status = .paused; $0.speed = 0 }
+            await updateItem(id: item.id) {
+                $0.status = .paused
+                $0.speed = 0
+            }
         } catch {
             errorMessage = "Failed to pause: \(error.localizedDescription)"
         }
     }
 
     func resumeDownload(_ item: DownloadItem) async {
-        guard let gid = item.aria2Gid else { return }
+        if let gid = item.aria2Gid {
+            do {
+                try await aria2.resume(gid: gid)
+                await updateItem(id: item.id) {
+                    $0.status = .downloading
+                    $0.speed = 0
+                }
+                return
+            } catch let error as Aria2Error {
+                guard shouldRecreateDownload(for: error) else {
+                    errorMessage = "Failed to resume: \(error.localizedDescription)"
+                    return
+                }
+            } catch {
+                errorMessage = "Failed to resume: \(error.localizedDescription)"
+                return
+            }
+        }
+
         do {
-            try await aria2.resume(gid: gid)
-            updateItemLocally(id: item.id) { $0.status = .downloading }
+            try await recreateDownloadSession(for: item)
         } catch {
             errorMessage = "Failed to resume: \(error.localizedDescription)"
         }
@@ -216,11 +246,83 @@ final class DownloadListViewModel {
         }
     }
 
-    private func updateItemLocally(id: UUID, mutate: (inout DownloadItem) -> Void) {
+    private func updateItem(id: UUID, mutate: (inout DownloadItem) -> Void) async {
         guard let index = downloads.firstIndex(where: { $0.id == id }) else { return }
         var item = downloads[index]
         mutate(&item)
         downloads[index] = item
+        try? await repository.update(DownloadRecord(item: item))
+    }
+
+    private func recreateDownloadSession(for item: DownloadItem) async throws(Aria2Error) {
+        let directory = item.filePath ?? URL.downloadsDirectory.path(percentEncoded: false)
+        let newGid = try await aria2.addDownload(
+            url: item.url,
+            headers: item.headers,
+            dir: directory,
+            segments: item.segments,
+            outputFileName: item.filename
+        )
+
+        await updateItem(id: item.id) {
+            $0.status = .downloading
+            $0.speed = 0
+            $0.filePath = directory
+            $0.aria2Gid = newGid
+        }
+    }
+
+    private func reconcilePersistedDownloadsWithAria2() async {
+        let statuses: [Aria2Status]
+        do {
+            let active = try await aria2.tellActive()
+            let waiting = try await aria2.tellWaiting(offset: 0, count: 100)
+            let stopped = try await aria2.tellStopped(offset: 0, count: 100)
+            statuses = active + waiting + stopped
+        } catch {
+            return
+        }
+
+        let knownGIDs = Set(statuses.map(\.gid))
+        var orphanedIDs: [UUID] = []
+
+        for item in downloads {
+            guard item.status == .waiting || item.status == .downloading || item.status == .paused else {
+                continue
+            }
+            guard let gid = item.aria2Gid, !knownGIDs.contains(gid) else {
+                continue
+            }
+
+            await updateItem(id: item.id) {
+                if $0.status == .waiting || $0.status == .downloading {
+                    $0.status = .paused
+                }
+                $0.speed = 0
+                $0.aria2Gid = nil
+            }
+            orphanedIDs.append(item.id)
+        }
+
+        for id in orphanedIDs {
+            guard let item = downloads.first(where: { $0.id == id }) else { continue }
+            do {
+                try await recreateDownloadSession(for: item)
+            } catch {
+                print("Failed to auto-resume download \(item.filename): \(error)")
+            }
+        }
+    }
+
+    private func shouldRecreateDownload(for error: Aria2Error) -> Bool {
+        switch error {
+        case .requestFailed(statusCode: 400):
+            return true
+        case .rpcError(_, let message):
+            return message.localizedCaseInsensitiveContains("not found")
+        default:
+            return false
+        }
     }
 
     private func mapAria2Status(_ status: String) -> DownloadStatus {
