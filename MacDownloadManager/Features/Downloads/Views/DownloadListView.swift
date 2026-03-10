@@ -146,9 +146,25 @@ struct DownloadListView: View {
                 .width(min: 60, ideal: 80)
 
                 TableColumn("Status", sortUsing: KeyPathComparator(\.status)) { item in
-                    Text(item.statusLabel)
+                    switch item.status {
+                    case .downloading, .waiting, .paused:
+                        HStack(spacing: 6) {
+                            ProgressView(value: item.progress)
+                                .progressViewStyle(.linear)
+                            Text("\(Int(item.progress * 100))%")
+                                .monospacedDigit()
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    case .completed:
+                        Text("Completed")
+                    case .error:
+                        Text("Error")
+                    case .removed:
+                        Text("Removed")
+                    }
                 }
-                .width(min: 70, ideal: 100)
+                .width(min: 120, ideal: 180)
 
                 TableColumn("Speed", sortUsing: KeyPathComparator(\.speed)) { item in
                     if item.status == .downloading, item.speed > 0 {
