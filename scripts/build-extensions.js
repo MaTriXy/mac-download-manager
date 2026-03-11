@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const SRC_DIR = join(ROOT, "Extension", "src");
+const FIREFOX_SRC_DIR = join(ROOT, "Extension", "src", "firefox");
 const ICONS_DIR = join(ROOT, "Extension", "icons");
 const DIST_DIR = join(ROOT, "dist");
 
@@ -95,7 +96,9 @@ function buildBrowser(browser) {
   mkdirSync(iconsOutDir, { recursive: true });
 
   for (const file of SOURCE_FILES) {
-    cpSync(join(SRC_DIR, file), join(outDir, file));
+    const overridePath = browser === "firefox" ? join(FIREFOX_SRC_DIR, file) : null;
+    const srcPath = overridePath && existsSync(overridePath) ? overridePath : join(SRC_DIR, file);
+    cpSync(srcPath, join(outDir, file));
   }
 
   for (const icon of ICON_FILES) {

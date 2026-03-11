@@ -180,6 +180,66 @@ describe("Chrome extension code", () => {
   });
 });
 
+describe("Firefox extension code", () => {
+  let bgCode;
+  let popupCode;
+
+  before(() => {
+    bgCode = readFileSync(join(DIST, "firefox", "background.js"), "utf8");
+    popupCode = readFileSync(join(DIST, "firefox", "popup.js"), "utf8");
+  });
+
+  it("background.js uses browser.* namespace (not chrome.*)", () => {
+    assert.ok(bgCode.includes("browser."), "should use browser.* namespace");
+    assert.ok(!bgCode.includes("chrome."), "should not use chrome.* namespace");
+  });
+
+  it("background.js uses onCreated for download interception (not onDeterminingFilename)", () => {
+    assert.ok(bgCode.includes("onCreated"), "should use onCreated");
+    assert.ok(!bgCode.includes("onDeterminingFilename"), "should not use onDeterminingFilename");
+  });
+
+  it("background.js cancels and erases intercepted downloads", () => {
+    assert.ok(bgCode.includes("downloads.cancel"), "should cancel downloads");
+    assert.ok(bgCode.includes("downloads.erase"), "should erase downloads");
+  });
+
+  it("background.js uses browser.webRequest.onSendHeaders for header caching", () => {
+    assert.ok(bgCode.includes("browser.webRequest.onSendHeaders"), "should use browser.webRequest.onSendHeaders");
+  });
+
+  it("background.js uses browser.runtime.connectNative for native messaging", () => {
+    assert.ok(bgCode.includes("browser.runtime.connectNative"), "should use browser.runtime.connectNative");
+    assert.ok(bgCode.includes("com.macdownloadmanager.helper"), "should use correct native host ID");
+  });
+
+  it("background.js shows badge for connection status", () => {
+    assert.ok(bgCode.includes("setBadgeText"), "should set badge text");
+    assert.ok(bgCode.includes('"!"'), "should show '!' when disconnected");
+  });
+
+  it("background.js supports auto-reconnect on disconnect", () => {
+    assert.ok(bgCode.includes("onDisconnect"), "should handle disconnect");
+    assert.ok(bgCode.includes("setTimeout"), "should auto-reconnect after timeout");
+  });
+
+  it("background.js caches Cookie, Authorization, Referer, User-Agent headers", () => {
+    assert.ok(bgCode.includes('"cookie"'), "should cache cookie header");
+    assert.ok(bgCode.includes('"authorization"'), "should cache authorization header");
+    assert.ok(bgCode.includes('"referer"'), "should cache referer header");
+    assert.ok(bgCode.includes('"user-agent"'), "should cache user-agent header");
+  });
+
+  it("popup.js uses browser.storage.sync (not chrome.storage.sync)", () => {
+    assert.ok(popupCode.includes("browser.storage.sync"), "should use browser.storage.sync");
+    assert.ok(!popupCode.includes("chrome.storage"), "should not use chrome.storage");
+  });
+
+  it("popup.js uses browser.runtime.sendMessage", () => {
+    assert.ok(popupCode.includes("browser.runtime.sendMessage"), "should use browser.runtime.sendMessage");
+  });
+});
+
 describe("Firefox manifest", () => {
   let manifest;
   before(() => {
