@@ -21,9 +21,8 @@ final class SafariDownloadMonitor {
         guard pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(SafariDownloadMonitor.pollInterval))
-                guard !Task.isCancelled else { break }
                 await self?.checkPendingDownloads()
+                try? await Task.sleep(for: .seconds(SafariDownloadMonitor.pollInterval))
             }
         }
     }

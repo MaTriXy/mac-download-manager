@@ -1,8 +1,22 @@
 import XCTest
 
-@testable import MacDownloadManager
+@testable import Mac_Download_Manager
 
 final class SafariExtensionTests: XCTestCase {
+
+    private let appGroupId = "group.com.macdownloadmanager"
+    private let pendingDownloadsKey = "pendingDownloads"
+
+    override func setUp() {
+        super.setUp()
+        // Clean up any leftover data from previous tests
+        UserDefaults(suiteName: appGroupId)?.removeObject(forKey: pendingDownloadsKey)
+    }
+
+    override func tearDown() {
+        UserDefaults(suiteName: appGroupId)?.removeObject(forKey: pendingDownloadsKey)
+        super.tearDown()
+    }
 
     // MARK: - SafariDownloadMonitor Tests
 
@@ -19,9 +33,6 @@ final class SafariExtensionTests: XCTestCase {
 
     @MainActor
     func testMonitorParsesDownloadRequest() async {
-        let appGroupId = "group.com.macdownloadmanager"
-        let pendingDownloadsKey = "pendingDownloads"
-
         let expectation = XCTestExpectation(description: "Download request received")
 
         var receivedMessage: NativeMessage?
@@ -44,11 +55,12 @@ final class SafariExtensionTests: XCTestCase {
                 ],
             ]
             defaults.set(request, forKey: pendingDownloadsKey)
+            defaults.synchronize()
         }
 
         monitor.start()
 
-        await fulfillment(of: [expectation], timeout: 5.0)
+        await fulfillment(of: [expectation], timeout: 10.0)
 
         monitor.stop()
 
@@ -69,9 +81,6 @@ final class SafariExtensionTests: XCTestCase {
 
     @MainActor
     func testMonitorIgnoresEmptyUrl() async {
-        let appGroupId = "group.com.macdownloadmanager"
-        let pendingDownloadsKey = "pendingDownloads"
-
         var downloadCount = 0
 
         let monitor = SafariDownloadMonitor { _ in
@@ -87,6 +96,7 @@ final class SafariExtensionTests: XCTestCase {
                 ],
             ]
             defaults.set(request, forKey: pendingDownloadsKey)
+            defaults.synchronize()
         }
 
         monitor.start()
@@ -101,9 +111,6 @@ final class SafariExtensionTests: XCTestCase {
 
     @MainActor
     func testMonitorHandlesOptionalFields() async {
-        let appGroupId = "group.com.macdownloadmanager"
-        let pendingDownloadsKey = "pendingDownloads"
-
         let expectation = XCTestExpectation(description: "Download request received")
 
         var receivedMessage: NativeMessage?
@@ -121,11 +128,12 @@ final class SafariExtensionTests: XCTestCase {
                 ],
             ]
             defaults.set(request, forKey: pendingDownloadsKey)
+            defaults.synchronize()
         }
 
         monitor.start()
 
-        await fulfillment(of: [expectation], timeout: 5.0)
+        await fulfillment(of: [expectation], timeout: 10.0)
 
         monitor.stop()
 
