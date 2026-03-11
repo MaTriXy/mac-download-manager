@@ -15,6 +15,25 @@ const VERSION = pkg.version;
 
 const BROWSERS = ["chrome", "firefox", "edge"];
 
+// Development public key for deterministic Chrome/Edge extension ID.
+// This key pins the extension to a stable ID during local development and
+// unpacked loading. When the extension is published to the Chrome Web Store
+// or Edge Add-ons, the store assigns its own key — remove this field from
+// the published manifest and update allowed_origins in the Mac app's
+// NativeMessagingRegistration.swift with the store-assigned extension ID.
+const CHROME_EXTENSION_KEY =
+  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsDoiCM4T2Ac2b5TfcenK" +
+  "Y6qbON5EBkyI9RsdIqQFT0ZL4GhZv3z/tO+JvdIHgYD3fqnsVfSl5YJQH2r7fzO" +
+  "z6b6+0bJ7paCnE2TNKIpNFR9XyLFtQory8wUwlgNx11ByW4l8nRkFKPED5xs6KzW" +
+  "zN8mb1qD2bHxFy3OFd8DGxdoIyoHu287PHX4UqU/5deTv3QhVro3hHf5szrV9dtJ" +
+  "haVfA9nhl2JX6YN/PALW7jsachtZwkpiGvmk8yPD+TTvWoNFU4LABrOl16uRB2e8T" +
+  "3s2PVEx3LZ5nmh1q54Ow4ozvWwG8i3XnciFhDjPsy8C/mDuz0EbVBwuK4/fzgkXT" +
+  "6QIDAQAB";
+
+// Extension ID derived from SHA-256 of the above public key.
+// First 16 bytes, each nibble mapped to a–p.
+const CHROME_EXTENSION_ID = "iomcmbjooojnddcbbillnngpdmionlmo";
+
 const SOURCE_FILES = [
   "background.js",
   "popup.html",
@@ -51,6 +70,7 @@ function baseManifest() {
 function chromeManifest() {
   const manifest = baseManifest();
   manifest.name = "Mac Download Manager";
+  manifest.key = CHROME_EXTENSION_KEY;
   manifest.background = { service_worker: "background.js" };
   return manifest;
 }
@@ -60,6 +80,7 @@ function edgeManifest() {
   manifest.name = "Mac Download Manager for Edge";
   manifest.description =
     "Intercept downloads and send them to Mac Download Manager for accelerated downloading (Edge)";
+  manifest.key = CHROME_EXTENSION_KEY;
   manifest.background = { service_worker: "background.js" };
   return manifest;
 }

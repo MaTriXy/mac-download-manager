@@ -67,7 +67,8 @@ browser.downloads.onCreated.addListener((downloadItem) => {
       return;
     }
 
-    const filename = downloadItem.filename || downloadItem.url.split("/").pop() || "";
+    const rawFilename = downloadItem.filename || downloadItem.url.split("/").pop() || "";
+    const filename = rawFilename.split("/").pop() || rawFilename;
 
     if (!shouldIntercept(settings, filename, downloadItem.fileSize)) {
       return;

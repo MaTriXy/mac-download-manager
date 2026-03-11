@@ -204,6 +204,17 @@ describe("Firefox extension code", () => {
     assert.ok(bgCode.includes("downloads.erase"), "should erase downloads");
   });
 
+  it("background.js normalizes filename to basename (strips absolute path)", () => {
+    assert.ok(
+      bgCode.includes('.split("/").pop()'),
+      "should extract basename from absolute path using split/pop"
+    );
+    assert.ok(
+      bgCode.includes("rawFilename"),
+      "should store raw filename before normalizing"
+    );
+  });
+
   it("background.js uses browser.webRequest.onSendHeaders for header caching", () => {
     assert.ok(bgCode.includes("browser.webRequest.onSendHeaders"), "should use browser.webRequest.onSendHeaders");
   });

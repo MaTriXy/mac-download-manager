@@ -58,72 +58,104 @@ struct NativeMessagingRegistrationTests {
 
     // MARK: - Manifest content
 
-    @Test func chromeManifestUsesAllowedOrigins() {
-        let manifest = NativeMessagingRegistration.manifestData(for: .chrome, helperPath: "/test/path")
-        let dict = try? JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+    @Test func chromeManifestUsesAllowedOrigins() throws {
+        let manifest = try NativeMessagingRegistration.manifestData(for: .chrome, helperPath: "/test/path")
+        let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
         #expect(dict?["allowed_origins"] != nil)
         #expect(dict?["allowed_extensions"] == nil)
     }
 
-    @Test func edgeManifestUsesAllowedOrigins() {
-        let manifest = NativeMessagingRegistration.manifestData(for: .edge, helperPath: "/test/path")
-        let dict = try? JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+    @Test func edgeManifestUsesAllowedOrigins() throws {
+        let manifest = try NativeMessagingRegistration.manifestData(for: .edge, helperPath: "/test/path")
+        let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
         #expect(dict?["allowed_origins"] != nil)
         #expect(dict?["allowed_extensions"] == nil)
     }
 
-    @Test func firefoxManifestUsesAllowedExtensions() {
-        let manifest = NativeMessagingRegistration.manifestData(for: .firefox, helperPath: "/test/path")
-        let dict = try? JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+    @Test func firefoxManifestUsesAllowedExtensions() throws {
+        let manifest = try NativeMessagingRegistration.manifestData(for: .firefox, helperPath: "/test/path")
+        let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
         #expect(dict?["allowed_extensions"] != nil)
         #expect(dict?["allowed_origins"] == nil)
     }
 
-    @Test func firefoxManifestContainsGeckoId() {
-        let manifest = NativeMessagingRegistration.manifestData(for: .firefox, helperPath: "/test/path")
-        let dict = try? JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+    @Test func firefoxManifestContainsGeckoId() throws {
+        let manifest = try NativeMessagingRegistration.manifestData(for: .firefox, helperPath: "/test/path")
+        let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
         let extensions = dict?["allowed_extensions"] as? [String]
         #expect(extensions?.contains("macdownloadmanager@example.com") == true)
     }
 
-    @Test func allManifestsHaveCorrectName() {
+    @Test func chromeAllowedOriginsContainsExactExtensionId() throws {
+        let manifest = try NativeMessagingRegistration.manifestData(for: .chrome, helperPath: "/test/path")
+        let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+        let origins = dict?["allowed_origins"] as? [String]
+        #expect(origins != nil)
+        for origin in origins ?? [] {
+            #expect(!origin.contains("*"), "allowed_origins must not contain wildcards")
+            #expect(origin.hasPrefix("chrome-extension://"), "origin must start with chrome-extension://")
+            #expect(origin.hasSuffix("/"), "origin must end with /")
+        }
+    }
+
+    @Test func edgeAllowedOriginsContainsExactExtensionId() throws {
+        let manifest = try NativeMessagingRegistration.manifestData(for: .edge, helperPath: "/test/path")
+        let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+        let origins = dict?["allowed_origins"] as? [String]
+        #expect(origins != nil)
+        for origin in origins ?? [] {
+            #expect(!origin.contains("*"), "allowed_origins must not contain wildcards")
+            #expect(origin.hasPrefix("chrome-extension://"), "origin must start with chrome-extension://")
+            #expect(origin.hasSuffix("/"), "origin must end with /")
+        }
+    }
+
+    @Test func allManifestsHaveCorrectName() throws {
         for browser in NativeMessagingBrowser.allCases {
-            let manifest = NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
-            let dict = try? JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+            let manifest = try NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
+            let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
             #expect(dict?["name"] as? String == "com.macdownloadmanager.helper")
         }
     }
 
-    @Test func allManifestsHaveCorrectHelperPath() {
+    @Test func allManifestsHaveCorrectHelperPath() throws {
         let helperPath = "/Applications/Mac Download Manager.app/Contents/MacOS/NativeMessagingHelper"
         for browser in NativeMessagingBrowser.allCases {
-            let manifest = NativeMessagingRegistration.manifestData(for: browser, helperPath: helperPath)
-            let dict = try? JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+            let manifest = try NativeMessagingRegistration.manifestData(for: browser, helperPath: helperPath)
+            let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
             #expect(dict?["path"] as? String == helperPath)
         }
     }
 
-    @Test func allManifestsHaveStdioType() {
+    @Test func allManifestsHaveStdioType() throws {
         for browser in NativeMessagingBrowser.allCases {
-            let manifest = NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
-            let dict = try? JSONSerialization.jsonObject(with: manifest) as? [String: Any]
+            let manifest = try NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
+            let dict = try JSONSerialization.jsonObject(with: manifest) as? [String: Any]
             #expect(dict?["type"] as? String == "stdio")
         }
     }
 
-    @Test func manifestDataIsValidJSON() {
+    @Test func manifestDataIsValidJSON() throws {
         for browser in NativeMessagingBrowser.allCases {
-            let data = NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
+            let data = try NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
             let parsed = try? JSONSerialization.jsonObject(with: data)
             #expect(parsed != nil, "Manifest for \(browser) should be valid JSON")
         }
     }
 
-    @Test func noPlaceholderExtensionId() {
+    @Test func noPlaceholderExtensionId() throws {
         for browser in NativeMessagingBrowser.allCases {
-            let data = NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
+            let data = try NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
             let jsonString = String(data: data, encoding: .utf8) ?? ""
             #expect(!jsonString.contains("YOUR_EXTENSION_ID"))
+        }
+    }
+
+    @Test func noWildcardInAllowedOrigins() throws {
+        for browser in [NativeMessagingBrowser.chrome, .edge] {
+            let data = try NativeMessagingRegistration.manifestData(for: browser, helperPath: "/test/path")
+            let jsonString = String(data: data, encoding: .utf8) ?? ""
+            #expect(!jsonString.contains("*"), "allowed_origins for \(browser.rawValue) must not contain wildcards")
         }
     }
 }
