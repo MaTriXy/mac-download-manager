@@ -5,6 +5,7 @@ import Foundation
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pollingTask: Task<Void, Never>?
     private var activityToken: NSObjectProtocol?
+    private var safariDownloadMonitor: SafariDownloadMonitor?
 
     private var container: DependencyContainer {
         DependencyContainer.shared
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startAria2()
         startSocketServer()
         registerNativeMessagingManifest()
+        startSafariDownloadMonitor()
         startPolling()
     }
 
@@ -38,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         pollingTask?.cancel()
+        safariDownloadMonitor?.stop()
         container.processManager.terminate()
         container.socketServer.stop()
         endDownloadActivity()
@@ -129,6 +132,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func registerNativeMessagingManifest() {
         let helperPath = Bundle.main.bundlePath + "/Contents/MacOS/NativeMessagingHelper"
         NativeMessagingRegistration.registerAll(helperPath: helperPath)
+    }
+
+    private func startSafariDownloadMonitor() {
+        safariDownloadMonitor = SafariDownloadMonitor { [weak self] message in
+            guard let self else { return }
+            let response = await self.handleNativeMessage(message)
+            if !response.accepted {
+                print("Safari download request failed: \(response.error ?? "unknown error")")
+            }
+        }
+        safariDownloadMonitor?.start()
     }
 
     private func startPolling() {

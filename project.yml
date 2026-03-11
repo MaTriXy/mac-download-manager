@@ -12,6 +12,8 @@ settings:
     SWIFT_VERSION: "6"
     SWIFT_STRICT_CONCURRENCY: complete
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
 
 packages:
   GRDB:
@@ -34,6 +36,9 @@ targets:
       - package: Sparkle
       - target: NativeMessagingHelper
         embed: false
+      - target: SafariExtension
+        embed: true
+        codeSign: false
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: MacDownloadManager/MacDownloadManager.entitlements
@@ -68,6 +73,31 @@ targets:
         PRODUCT_NAME: NativeMessagingHelper
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_IDENTITY: "-"
+
+  SafariExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: SafariExtension
+        excludes:
+          - Resources/**
+    resources:
+      - path: SafariExtension/Resources
+    dependencies:
+      - sdk: SafariServices.framework
+    info:
+      path: SafariExtension/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).SafariWebExtensionHandler"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macdownloadmanager.app.safari-extension
+        PRODUCT_NAME: Safari Extension
+        CODE_SIGN_ENTITLEMENTS: SafariExtension/SafariExtension.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        GENERATE_INFOPLIST_FILE: false
 
   MacDownloadManagerTests:
     type: bundle.unit-test
