@@ -18,6 +18,21 @@ const HEADER_CLEANUP_INTERVAL_MS = 10_000;
 const headerCache = new Map();
 let nativePort = null;
 let nativeConnected = false;
+let currentSettings = { ...DEFAULT_SETTINGS };
+
+function loadSettings() {
+  chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
+    currentSettings = settings;
+  });
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync") {
+    loadSettings();
+  }
+});
+
+loadSettings();
 
 function cacheHeaders(details) {
   const headers = {};
@@ -41,7 +56,7 @@ function cleanHeaderCache() {
 
 setInterval(cleanHeaderCache, HEADER_CLEANUP_INTERVAL_MS);
 
-browser.webRequest.onSendHeaders.addListener(
+chrome.webRequest.onSendHeaders.addListener(
   cacheHeaders,
   { urls: ["<all_urls>"] },
   ["requestHeaders"]
@@ -61,45 +76,43 @@ function shouldIntercept(settings, filename, fileSize) {
   return typeMatch || sizeMatch;
 }
 
-browser.downloads.onCreated.addListener((downloadItem) => {
-  browser.storage.sync.get(DEFAULT_SETTINGS).then((settings) => {
-    if (!settings.enabled || !nativeConnected) {
-      return;
-    }
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+  if (!currentSettings.enabled || !nativeConnected) {
+    return;
+  }
 
-    const rawFilename = downloadItem.filename || downloadItem.url.split("/").pop() || "";
-    const filename = rawFilename.split("/").pop() || rawFilename;
+  if (!shouldIntercept(currentSettings, item.filename, item.fileSize)) {
+    return;
+  }
 
-    if (!shouldIntercept(settings, filename, downloadItem.fileSize)) {
-      return;
-    }
+  const cached = headerCache.get(item.url);
+  const message = {
+    url: item.url,
+    headers: cached?.headers || null,
+    filename: item.filename,
+    fileSize: item.fileSize > 0 ? item.fileSize : null,
+    referrer: item.referrer || cached?.headers?.referer || null
+  };
 
-    browser.downloads.cancel(downloadItem.id).then(() => {
-      browser.downloads.erase({ id: downloadItem.id });
-    });
+  sendNativeMessage(message);
 
-    const cached = headerCache.get(downloadItem.url);
-    const message = {
-      url: downloadItem.url,
-      headers: cached?.headers || null,
-      filename,
-      fileSize: downloadItem.fileSize > 0 ? downloadItem.fileSize : null,
-      referrer: downloadItem.referrer || cached?.headers?.referer || null
-    };
-
-    sendNativeMessage(message);
+  chrome.downloads.cancel(item.id, () => {
+    void chrome.runtime.lastError;
+    suggest({ filename: item.filename });
   });
+
+  return true;
 });
 
 function connectNative() {
   try {
-    nativePort = browser.runtime.connectNative(NATIVE_HOST);
+    nativePort = chrome.runtime.connectNative(NATIVE_HOST);
     nativeConnected = true;
     updateBadge();
 
     nativePort.onMessage.addListener((response) => {
       if (response.activeCount !== undefined) {
-        browser.action.setBadgeText({
+        chrome.action.setBadgeText({
           text: response.activeCount > 0 ? String(response.activeCount) : ""
         });
       }
@@ -127,15 +140,15 @@ function sendNativeMessage(message) {
 
 function updateBadge() {
   if (nativeConnected) {
-    browser.action.setBadgeText({ text: "" });
-    browser.action.setBadgeBackgroundColor({ color: "#4CAF50" });
+    chrome.action.setBadgeText({ text: "" });
+    chrome.action.setBadgeBackgroundColor({ color: "#4CAF50" });
   } else {
-    browser.action.setBadgeText({ text: "!" });
-    browser.action.setBadgeBackgroundColor({ color: "#F44336" });
+    chrome.action.setBadgeText({ text: "!" });
+    chrome.action.setBadgeBackgroundColor({ color: "#F44336" });
   }
 }
 
-browser.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === "getStatus") {
     sendResponse({ connected: nativeConnected });
   }

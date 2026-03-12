@@ -18,6 +18,21 @@ const HEADER_CLEANUP_INTERVAL_MS = 10_000;
 const headerCache = new Map();
 let nativePort = null;
 let nativeConnected = false;
+let currentSettings = { ...DEFAULT_SETTINGS };
+
+function loadSettings() {
+  browser.storage.sync.get(DEFAULT_SETTINGS).then((settings) => {
+    currentSettings = settings;
+  });
+}
+
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync") {
+    loadSettings();
+  }
+});
+
+loadSettings();
 
 function cacheHeaders(details) {
   const headers = {};
@@ -41,7 +56,7 @@ function cleanHeaderCache() {
 
 setInterval(cleanHeaderCache, HEADER_CLEANUP_INTERVAL_MS);
 
-chrome.webRequest.onSendHeaders.addListener(
+browser.webRequest.onSendHeaders.addListener(
   cacheHeaders,
   { urls: ["<all_urls>"] },
   ["requestHeaders"]
@@ -61,45 +76,43 @@ function shouldIntercept(settings, filename, fileSize) {
   return typeMatch || sizeMatch;
 }
 
-chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
-    if (!settings.enabled || !nativeConnected) {
-      suggest({ filename: item.filename });
-      return;
-    }
+browser.downloads.onCreated.addListener((downloadItem) => {
+  if (!currentSettings.enabled || !nativeConnected) {
+    return;
+  }
 
-    if (!shouldIntercept(settings, item.filename, item.fileSize)) {
-      suggest({ filename: item.filename });
-      return;
-    }
+  const rawFilename = downloadItem.filename || downloadItem.url.split("/").pop() || "";
+  const filename = rawFilename.split("/").pop() || rawFilename;
 
-    chrome.downloads.cancel(item.id);
+  if (!shouldIntercept(currentSettings, filename, downloadItem.fileSize)) {
+    return;
+  }
 
-    const cached = headerCache.get(item.url);
-    const message = {
-      url: item.url,
-      headers: cached?.headers || null,
-      filename: item.filename,
-      fileSize: item.fileSize > 0 ? item.fileSize : null,
-      referrer: item.referrer || cached?.headers?.referer || null
-    };
+  browser.downloads.cancel(downloadItem.id).then(() => {
+    browser.downloads.erase({ id: downloadItem.id });
+  }).catch(() => {});
 
-    sendNativeMessage(message);
-    suggest({ filename: item.filename });
-  });
+  const cached = headerCache.get(downloadItem.url);
+  const message = {
+    url: downloadItem.url,
+    headers: cached?.headers || null,
+    filename,
+    fileSize: downloadItem.fileSize > 0 ? downloadItem.fileSize : null,
+    referrer: downloadItem.referrer || cached?.headers?.referer || null
+  };
 
-  return true;
+  sendNativeMessage(message);
 });
 
 function connectNative() {
   try {
-    nativePort = chrome.runtime.connectNative(NATIVE_HOST);
+    nativePort = browser.runtime.connectNative(NATIVE_HOST);
     nativeConnected = true;
     updateBadge();
 
     nativePort.onMessage.addListener((response) => {
       if (response.activeCount !== undefined) {
-        chrome.action.setBadgeText({
+        browser.action.setBadgeText({
           text: response.activeCount > 0 ? String(response.activeCount) : ""
         });
       }
@@ -127,15 +140,15 @@ function sendNativeMessage(message) {
 
 function updateBadge() {
   if (nativeConnected) {
-    chrome.action.setBadgeText({ text: "" });
-    chrome.action.setBadgeBackgroundColor({ color: "#4CAF50" });
+    browser.action.setBadgeText({ text: "" });
+    browser.action.setBadgeBackgroundColor({ color: "#4CAF50" });
   } else {
-    chrome.action.setBadgeText({ text: "!" });
-    chrome.action.setBadgeBackgroundColor({ color: "#F44336" });
+    browser.action.setBadgeText({ text: "!" });
+    browser.action.setBadgeBackgroundColor({ color: "#F44336" });
   }
 }
 
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+browser.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === "getStatus") {
     sendResponse({ connected: nativeConnected });
   }
