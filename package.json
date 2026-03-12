@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-extensions.js",
+    "dev:chrome": "bun run build && open -a 'Mac Download Manager' && web-ext run --source-dir dist/chrome --target chromium --chromium-binary \"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary\"",
+    "dev:firefox": "bun run build && open -a 'Mac Download Manager' && web-ext run --source-dir dist/firefox --target firefox-desktop",
     "test": "node --test Tests/build.test.js",
     "clean": "rm -rf dist"
   },
