@@ -9,6 +9,15 @@ struct MenuBarDownload: Identifiable, Sendable {
     var status: String
 }
 
+struct PendingExtensionDownload: Equatable {
+    let id: UUID
+    let message: NativeMessage
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 @Observable @MainActor
 final class DependencyContainer {
     static var shared: DependencyContainer!
@@ -19,6 +28,7 @@ final class DependencyContainer {
     let processManager: Aria2ProcessManager
     let socketServer: SocketServer
     let settingsViewModel: SettingsViewModel
+    let notificationService: NotificationService
 
     let aria2Secret: String
     let aria2Port: Int
@@ -26,6 +36,8 @@ final class DependencyContainer {
     var activeDownloadCount: Int = 0
     var menuBarDownloads: [MenuBarDownload] = []
     var globalDownloadSpeed: Int64 = 0
+    var pendingExtensionDownload: PendingExtensionDownload?
+    var openMainWindow: (() -> Void)?
 
     var menuBarIcon: String {
         activeDownloadCount > 0 ? "arrow.down.circle.fill" : "arrow.down.circle"
@@ -42,6 +54,7 @@ final class DependencyContainer {
         processManager = Aria2ProcessManager()
         socketServer = SocketServer()
         settingsViewModel = SettingsViewModel(aria2: aria2Client)
+        notificationService = NotificationService.shared
     }
 
     init(inMemory: Bool) {
@@ -53,5 +66,6 @@ final class DependencyContainer {
         processManager = Aria2ProcessManager()
         socketServer = SocketServer()
         settingsViewModel = SettingsViewModel(aria2: aria2Client)
+        notificationService = NotificationService.shared
     }
 }

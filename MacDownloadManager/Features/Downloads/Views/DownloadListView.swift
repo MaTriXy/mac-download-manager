@@ -28,6 +28,10 @@ struct DownloadListView: View {
             )
             viewModel = vm
             await vm.loadDownloads()
+
+            if container.pendingExtensionDownload != nil {
+                handlePendingExtensionDownload()
+            }
         }
         .task(id: "polling") {
             while !Task.isCancelled {
@@ -45,7 +49,7 @@ struct DownloadListView: View {
             }
         }
         .onChange(of: viewModel?.isAddURLPresented) { oldValue, newValue in
-            if newValue == true, oldValue != true {
+            if newValue == true, oldValue != true, addDownloadViewModel == nil {
                 addDownloadViewModel = AddDownloadViewModel(
                     metadataService: DefaultURLMetadataService(),
                     repository: container.repository,
@@ -57,6 +61,10 @@ struct DownloadListView: View {
                 addDownloadViewModel = nil
                 Task { await viewModel?.loadDownloads() }
             }
+        }
+        .onChange(of: container.pendingExtensionDownload) { _, newValue in
+            guard newValue != nil else { return }
+            handlePendingExtensionDownload()
         }
         .alert(
             "Error",
@@ -85,7 +93,7 @@ struct DownloadListView: View {
 
     private var sidebar: some View {
         List(FilterOption.allCases, id: \.self, selection: Binding(
-            get: { viewModel?.filterOption ?? .active },
+            get: { viewModel?.filterOption ?? .all },
             set: { viewModel?.filterOption = $0 }
         )) { option in
             Label(option.displayName, systemImage: iconForFilter(option))
@@ -293,10 +301,33 @@ struct DownloadListView: View {
 
     private func iconForFilter(_ option: FilterOption) -> String {
         switch option {
+        case .all: "list.bullet"
         case .active: "arrow.down.circle"
         case .completed: "checkmark.circle"
         case .paused: "pause.circle"
-        case .all: "list.bullet"
         }
+    }
+
+    private func handlePendingExtensionDownload() {
+        guard let pending = container.pendingExtensionDownload else { return }
+        container.pendingExtensionDownload = nil
+
+        if viewModel?.isAddURLPresented == true {
+            viewModel?.isAddURLPresented = false
+            addDownloadViewModel?.cancel()
+            addDownloadViewModel = nil
+        }
+
+        let addVM = AddDownloadViewModel(
+            metadataService: DefaultURLMetadataService(),
+            repository: container.repository,
+            aria2: container.aria2Client,
+            settings: container.settingsViewModel
+        )
+        addVM.prefill(message: pending.message)
+        addDownloadViewModel = addVM
+        viewModel?.isAddURLPresented = true
+
+        Task { await addVM.submitURL() }
     }
 }

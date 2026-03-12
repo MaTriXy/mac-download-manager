@@ -5,15 +5,18 @@ import Foundation
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pollingTask: Task<Void, Never>?
     private var activityToken: NSObjectProtocol?
+    private var safariDownloadMonitor: SafariDownloadMonitor?
 
     private var container: DependencyContainer {
         DependencyContainer.shared
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        container.notificationService.requestAuthorization()
         startAria2()
         startSocketServer()
         registerNativeMessagingManifest()
+        startSafariDownloadMonitor()
         startPolling()
     }
 
@@ -38,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         pollingTask?.cancel()
+        safariDownloadMonitor?.stop()
         container.processManager.terminate()
         container.socketServer.stop()
         endDownloadActivity()
@@ -82,81 +86,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleNativeMessage(_ message: NativeMessage) async -> NativeResponse {
-        guard let url = URL(string: message.url) else {
+        guard URL(string: message.url) != nil else {
             return NativeResponse(accepted: false, error: "Invalid URL", activeCount: nil)
         }
 
-        var headers = message.headers ?? [:]
-        if let referrer = message.referrer, !referrer.isEmpty {
-            headers["Referer"] = referrer
+        container.pendingExtensionDownload = PendingExtensionDownload(id: UUID(), message: message)
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let window = NSApp.windows.first(where: { $0.title == "Mac Download Manager" }) ?? NSApp.windows.first(where: { !$0.isMiniaturized }) {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            container.openMainWindow?()
         }
 
-        let filename = message.filename ?? url.suggestedFilename
-        let downloadDir = URL.downloadsDirectory.path(percentEncoded: false)
-
-        do {
-            let gid = try await container.aria2Client.addDownload(
-                url: url,
-                headers: headers,
-                dir: downloadDir,
-                segments: 16,
-                outputFileName: filename
-            )
-
-            var headersJSON: String?
-            if !headers.isEmpty, let data = try? JSONEncoder().encode(headers) {
-                headersJSON = String(data: data, encoding: .utf8)
-            }
-
-            let record = DownloadRecord(
-                url: url.absoluteString,
-                filename: filename,
-                fileSize: message.fileSize,
-                status: DownloadStatus.downloading.rawValue,
-                segments: 16,
-                headersJSON: headersJSON,
-                filePath: downloadDir,
-                aria2Gid: gid
-            )
-
-            try await container.repository.save(record)
-            return NativeResponse(accepted: true, error: nil, activeCount: container.activeDownloadCount)
-        } catch {
-            return NativeResponse(accepted: false, error: error.localizedDescription, activeCount: nil)
-        }
+        return NativeResponse(accepted: true, error: nil, activeCount: container.activeDownloadCount)
     }
 
     private func registerNativeMessagingManifest() {
-        let chromeDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Google/Chrome/NativeMessagingHosts")
-
-        try? FileManager.default.createDirectory(at: chromeDir, withIntermediateDirectories: true)
-
         let helperPath = Bundle.main.bundlePath + "/Contents/MacOS/NativeMessagingHelper"
+        NativeMessagingRegistration.registerAll(helperPath: helperPath)
+    }
 
-        struct NativeManifest: Encodable {
-            let name: String
-            let description: String
-            let path: String
-            let type: String
-            let allowed_origins: [String]
+    private func startSafariDownloadMonitor() {
+        safariDownloadMonitor = SafariDownloadMonitor { [weak self] message in
+            guard let self else { return }
+            let response = await self.handleNativeMessage(message)
+            if !response.accepted {
+                print("Safari download request failed: \(response.error ?? "unknown error")")
+            }
         }
-
-        let manifest = NativeManifest(
-            name: "com.macdownloadmanager.helper",
-            description: "Mac Download Manager Native Messaging Host",
-            path: helperPath,
-            type: "stdio",
-            allowed_origins: ["chrome-extension://YOUR_EXTENSION_ID/"]
-        )
-
-        let manifestPath = chromeDir.appendingPathComponent("com.macdownloadmanager.helper.json")
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        if let data = try? encoder.encode(manifest) {
-            try? data.write(to: manifestPath)
-        }
+        safariDownloadMonitor?.start()
     }
 
     private func startPolling() {

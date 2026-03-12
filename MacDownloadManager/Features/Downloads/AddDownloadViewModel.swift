@@ -57,12 +57,14 @@ final class AddDownloadViewModel {
     private let repository: any DownloadRepository
     private let aria2: any DownloadManagingAria2
     private let settings: SettingsViewModel
+    private let notificationService: NotificationService
     private let diskSpaceProvider: any DiskSpaceProviding
     private let fileManager: FileManager
 
     private var queryGeneration: Int = 0
     private var resolvedMetadata: URLMetadata?
     private var trimmedURLString: String = ""
+    private var interceptedMessage: NativeMessage?
 
     // MARK: - Init
 
@@ -71,6 +73,7 @@ final class AddDownloadViewModel {
         repository: any DownloadRepository,
         aria2: any DownloadManagingAria2,
         settings: SettingsViewModel,
+        notificationService: NotificationService = .shared,
         diskSpaceProvider: any DiskSpaceProviding = SystemDiskSpaceProvider(),
         fileManager: FileManager = .default
     ) {
@@ -78,6 +81,7 @@ final class AddDownloadViewModel {
         self.repository = repository
         self.aria2 = aria2
         self.settings = settings
+        self.notificationService = notificationService
         self.diskSpaceProvider = diskSpaceProvider
         self.fileManager = fileManager
     }
@@ -116,8 +120,22 @@ final class AddDownloadViewModel {
         let dir = resolveDefaultDirectory()
         directoryOptions = buildDirectoryOptions(defaultDir: dir)
         selectedDirectory = dir
-        editableFilename = metadata.filename
-        state = .newDownload(metadata)
+
+        var filename = metadata.filename
+        var fileSize = metadata.fileSize
+        if let msg = interceptedMessage {
+            if let msgFilename = msg.filename, !msgFilename.isEmpty, (filename == "download" || filename.isEmpty) {
+                filename = sanitizeFilename(msgFilename)
+            }
+            if fileSize == nil, let msgSize = msg.fileSize, msgSize > 0 {
+                fileSize = msgSize
+            }
+        }
+        let enrichedMetadata = URLMetadata(filename: filename, fileSize: fileSize)
+        resolvedMetadata = enrichedMetadata
+
+        editableFilename = filename
+        state = .newDownload(enrichedMetadata)
     }
 
     func cancel() {
@@ -141,15 +159,21 @@ final class AddDownloadViewModel {
         let dir = resolveDefaultDirectory()
         let filename = metadata.filename
         let segments = settings.defaultSegments
+        let headers = buildHeaders()
 
         do {
             let gid = try await aria2.addDownload(
                 url: url,
-                headers: [:],
+                headers: headers,
                 dir: dir,
                 segments: segments,
                 outputFileName: filename
             )
+
+            var headersJSON: String?
+            if !headers.isEmpty, let data = try? JSONEncoder().encode(headers) {
+                headersJSON = String(data: data, encoding: .utf8)
+            }
 
             let record = DownloadRecord(
                 url: trimmedURLString,
@@ -157,11 +181,13 @@ final class AddDownloadViewModel {
                 fileSize: metadata.fileSize,
                 status: DownloadStatus.downloading.rawValue,
                 segments: segments,
+                headersJSON: headersJSON,
                 filePath: dir,
                 aria2Gid: gid
             )
 
             try await repository.save(record)
+            notificationService.postDownloadStarted(filename: filename)
         } catch {}
 
         resetState()
@@ -180,15 +206,21 @@ final class AddDownloadViewModel {
 
         let metadata = resolvedMetadata
         let segments = settings.defaultSegments
+        let headers = buildHeaders()
 
         do {
             let gid = try await aria2.addDownload(
                 url: url,
-                headers: [:],
+                headers: headers,
                 dir: selectedDirectory,
                 segments: segments,
                 outputFileName: sanitizedFilename
             )
+
+            var headersJSON: String?
+            if !headers.isEmpty, let data = try? JSONEncoder().encode(headers) {
+                headersJSON = String(data: data, encoding: .utf8)
+            }
 
             let record = DownloadRecord(
                 url: trimmedURLString,
@@ -196,14 +228,25 @@ final class AddDownloadViewModel {
                 fileSize: metadata?.fileSize,
                 status: DownloadStatus.downloading.rawValue,
                 segments: segments,
+                headersJSON: headersJSON,
                 filePath: selectedDirectory,
                 aria2Gid: gid
             )
 
             try await repository.save(record)
+            notificationService.postDownloadStarted(filename: sanitizedFilename)
         } catch {}
 
         resetState()
+    }
+
+    func prefill(url: String) {
+        urlText = url
+    }
+
+    func prefill(message: NativeMessage) {
+        urlText = message.url
+        interceptedMessage = message
     }
 
     func addBrowsedDirectory(_ path: String) {
@@ -225,6 +268,16 @@ final class AddDownloadViewModel {
         resolvedMetadata = nil
         trimmedURLString = ""
         availableDiskSpace = nil
+        interceptedMessage = nil
+    }
+
+    private func buildHeaders() -> [String: String] {
+        guard let msg = interceptedMessage else { return [:] }
+        var headers = msg.headers ?? [:]
+        if let referrer = msg.referrer, !referrer.isEmpty {
+            headers["Referer"] = referrer
+        }
+        return headers
     }
 
     private func buildDirectoryOptions(defaultDir: String) -> [String] {

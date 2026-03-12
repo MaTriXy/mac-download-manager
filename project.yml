@@ -12,6 +12,8 @@ settings:
     SWIFT_VERSION: "6"
     SWIFT_STRICT_CONCURRENCY: complete
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
 
 packages:
   GRDB:
@@ -34,13 +36,19 @@ targets:
       - package: Sparkle
       - target: NativeMessagingHelper
         embed: false
+      - target: SafariExtension
+        embed: true
+        codeSign: false
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: MacDownloadManager/MacDownloadManager.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.macdownloadmanager.app
         PRODUCT_NAME: Mac Download Manager
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
         INFOPLIST_KEY_CFBundleDisplayName: Mac Download Manager
         INFOPLIST_KEY_LSUIElement: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_IDENTITY: "-"
     postCompileScripts:
@@ -68,6 +76,33 @@ targets:
         PRODUCT_NAME: NativeMessagingHelper
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_IDENTITY: "-"
+
+  SafariExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Extensions/Safari
+        excludes:
+          - Resources/**
+    resources:
+      - path: Extensions/Safari/Resources
+    dependencies:
+      - sdk: SafariServices.framework
+    info:
+      path: Extensions/Safari/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).SafariWebExtensionHandler"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macdownloadmanager.app.safari-extension
+        PRODUCT_NAME: Safari Extension
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        CODE_SIGN_ENTITLEMENTS: Extensions/Safari/SafariExtension.entitlements
+        CODE_SIGN_IDENTITY: "-"
+        GENERATE_INFOPLIST_FILE: false
 
   MacDownloadManagerTests:
     type: bundle.unit-test

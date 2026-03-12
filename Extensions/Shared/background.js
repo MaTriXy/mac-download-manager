@@ -18,6 +18,23 @@ const HEADER_CLEANUP_INTERVAL_MS = 10_000;
 const headerCache = new Map();
 let nativePort = null;
 let nativeConnected = false;
+let connectPending = false;
+let pendingMessages = [];
+let currentSettings = { ...DEFAULT_SETTINGS };
+
+function loadSettings() {
+  chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
+    currentSettings = settings;
+  });
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync") {
+    loadSettings();
+  }
+});
+
+loadSettings();
 
 function cacheHeaders(details) {
   const headers = {};
@@ -62,29 +79,29 @@ function shouldIntercept(settings, filename, fileSize) {
 }
 
 chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
-    if (!settings.enabled || !nativeConnected) {
-      suggest({ filename: item.filename });
-      return;
-    }
+  if (!currentSettings.enabled) {
+    return;
+  }
 
-    if (!shouldIntercept(settings, item.filename, item.fileSize)) {
-      suggest({ filename: item.filename });
-      return;
-    }
+  if (!shouldIntercept(currentSettings, item.filename, item.fileSize)) {
+    return;
+  }
 
-    chrome.downloads.cancel(item.id);
+  console.log("[MDM] Intercepted download:", item.filename, item.url);
 
-    const cached = headerCache.get(item.url);
-    const message = {
-      url: item.url,
-      headers: cached?.headers || null,
-      filename: item.filename,
-      fileSize: item.fileSize > 0 ? item.fileSize : null,
-      referrer: item.referrer || cached?.headers?.referer || null
-    };
+  const cached = headerCache.get(item.url);
+  const message = {
+    url: item.url,
+    headers: cached?.headers || null,
+    filename: item.filename,
+    fileSize: item.fileSize > 0 ? item.fileSize : null,
+    referrer: item.referrer || cached?.headers?.referer || null
+  };
 
-    sendNativeMessage(message);
+  sendNativeMessage(message);
+
+  chrome.downloads.cancel(item.id, () => {
+    void chrome.runtime.lastError;
     suggest({ filename: item.filename });
   });
 
@@ -92,10 +109,27 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
 });
 
 function connectNative() {
+  if (connectPending) {
+    console.log("[MDM] connectNative: already pending, skipping");
+    return;
+  }
+  connectPending = true;
+  console.log("[MDM] connectNative: attempting connection");
+
   try {
     nativePort = chrome.runtime.connectNative(NATIVE_HOST);
     nativeConnected = true;
+    connectPending = false;
+    console.log("[MDM] connectNative: connected");
     updateBadge();
+
+    if (pendingMessages.length > 0) {
+      console.log("[MDM] connectNative: flushing", pendingMessages.length, "pending messages");
+    }
+    for (const msg of pendingMessages) {
+      nativePort.postMessage(msg);
+    }
+    pendingMessages = [];
 
     nativePort.onMessage.addListener((response) => {
       if (response.activeCount !== undefined) {
@@ -106,14 +140,19 @@ function connectNative() {
     });
 
     nativePort.onDisconnect.addListener(() => {
+      const error = chrome.runtime.lastError?.message || "unknown";
+      console.log("[MDM] connectNative: disconnected, reason:", error);
       nativeConnected = false;
       nativePort = null;
+      connectPending = false;
       updateBadge();
       setTimeout(connectNative, 5000);
     });
-  } catch {
+  } catch (e) {
+    console.log("[MDM] connectNative: caught error:", e.message);
     nativeConnected = false;
     nativePort = null;
+    connectPending = false;
     updateBadge();
     setTimeout(connectNative, 5000);
   }
@@ -121,7 +160,12 @@ function connectNative() {
 
 function sendNativeMessage(message) {
   if (nativePort && nativeConnected) {
+    console.log("[MDM] sendNativeMessage: posting to native host");
     nativePort.postMessage(message);
+  } else {
+    console.log("[MDM] sendNativeMessage: disconnected, queuing (pending=" + (pendingMessages.length + 1) + ")");
+    pendingMessages.push(message);
+    connectNative();
   }
 }
 
