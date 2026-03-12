@@ -122,7 +122,7 @@ private struct PopUpButton: NSViewRepresentable {
             self.selection = selection
         }
 
-        @objc func selectionChanged(_ sender: NSPopUpButton) {
+        @MainActor @objc func selectionChanged(_ sender: NSPopUpButton) {
             if let title = sender.titleOfSelectedItem {
                 selection.wrappedValue = title
             }
