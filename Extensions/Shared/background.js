@@ -18,6 +18,8 @@ const HEADER_CLEANUP_INTERVAL_MS = 10_000;
 const headerCache = new Map();
 let nativePort = null;
 let nativeConnected = false;
+let connectPending = false;
+let pendingMessages = [];
 let currentSettings = { ...DEFAULT_SETTINGS };
 
 function loadSettings() {
@@ -77,13 +79,15 @@ function shouldIntercept(settings, filename, fileSize) {
 }
 
 chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  if (!currentSettings.enabled || !nativeConnected) {
+  if (!currentSettings.enabled) {
     return;
   }
 
   if (!shouldIntercept(currentSettings, item.filename, item.fileSize)) {
     return;
   }
+
+  console.log("[MDM] Intercepted download:", item.filename, item.url);
 
   const cached = headerCache.get(item.url);
   const message = {
@@ -105,10 +109,27 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
 });
 
 function connectNative() {
+  if (connectPending) {
+    console.log("[MDM] connectNative: already pending, skipping");
+    return;
+  }
+  connectPending = true;
+  console.log("[MDM] connectNative: attempting connection");
+
   try {
     nativePort = chrome.runtime.connectNative(NATIVE_HOST);
     nativeConnected = true;
+    connectPending = false;
+    console.log("[MDM] connectNative: connected");
     updateBadge();
+
+    if (pendingMessages.length > 0) {
+      console.log("[MDM] connectNative: flushing", pendingMessages.length, "pending messages");
+    }
+    for (const msg of pendingMessages) {
+      nativePort.postMessage(msg);
+    }
+    pendingMessages = [];
 
     nativePort.onMessage.addListener((response) => {
       if (response.activeCount !== undefined) {
@@ -119,14 +140,19 @@ function connectNative() {
     });
 
     nativePort.onDisconnect.addListener(() => {
+      const error = chrome.runtime.lastError?.message || "unknown";
+      console.log("[MDM] connectNative: disconnected, reason:", error);
       nativeConnected = false;
       nativePort = null;
+      connectPending = false;
       updateBadge();
       setTimeout(connectNative, 5000);
     });
-  } catch {
+  } catch (e) {
+    console.log("[MDM] connectNative: caught error:", e.message);
     nativeConnected = false;
     nativePort = null;
+    connectPending = false;
     updateBadge();
     setTimeout(connectNative, 5000);
   }
@@ -134,7 +160,12 @@ function connectNative() {
 
 function sendNativeMessage(message) {
   if (nativePort && nativeConnected) {
+    console.log("[MDM] sendNativeMessage: posting to native host");
     nativePort.postMessage(message);
+  } else {
+    console.log("[MDM] sendNativeMessage: disconnected, queuing (pending=" + (pendingMessages.length + 1) + ")");
+    pendingMessages.push(message);
+    connectNative();
   }
 }
 
