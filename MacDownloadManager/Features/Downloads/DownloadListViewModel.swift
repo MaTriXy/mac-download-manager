@@ -10,6 +10,7 @@ final class DownloadListViewModel {
 
   private let repository: any DownloadRepository
   private let aria2: any DownloadManagingAria2
+  private let notificationService: NotificationService
   private var needsAria2Reconciliation = true
   private var resumeProgressSnapshots: [UUID: ResumeProgressSnapshot] = [:]
 
@@ -46,9 +47,10 @@ final class DownloadListViewModel {
     return items
   }
 
-  init(repository: any DownloadRepository, aria2: any DownloadManagingAria2) {
+  init(repository: any DownloadRepository, aria2: any DownloadManagingAria2, notificationService: NotificationService = .shared) {
     self.repository = repository
     self.aria2 = aria2
+    self.notificationService = notificationService
   }
 
   func loadDownloads() async {
@@ -123,6 +125,7 @@ final class DownloadListViewModel {
 
       try await repository.save(record)
       downloads.insert(DownloadItem(record: record), at: 0)
+      notificationService.postDownloadStarted(filename: url.suggestedFilename)
     } catch {
       errorMessage = "Failed to add download: \(error.localizedDescription)"
     }
@@ -261,6 +264,10 @@ final class DownloadListViewModel {
       let existing = downloads[index]
       let resolvedFilename = resolveFilename(from: status, fallback: existing.filename)
       let mappedStatus = mapAria2Status(status.status)
+
+      if mappedStatus == .completed && existing.status != .completed {
+        notificationService.postDownloadCompleted(filename: resolvedFilename)
+      }
       let preservedProgress = preservedProgressIfNeeded(
         for: existing,
         completedBytes: status.completedBytes,

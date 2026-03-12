@@ -44,8 +44,11 @@ targets:
         CODE_SIGN_ENTITLEMENTS: MacDownloadManager/MacDownloadManager.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.macdownloadmanager.app
         PRODUCT_NAME: Mac Download Manager
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
         INFOPLIST_KEY_CFBundleDisplayName: Mac Download Manager
         INFOPLIST_KEY_LSUIElement: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_IDENTITY: "-"
     postCompileScripts:
@@ -78,15 +81,15 @@ targets:
     type: app-extension
     platform: macOS
     sources:
-      - path: SafariExtension
+      - path: Extensions/Safari
         excludes:
           - Resources/**
     resources:
-      - path: SafariExtension/Resources
+      - path: Extensions/Safari/Resources
     dependencies:
       - sdk: SafariServices.framework
     info:
-      path: SafariExtension/Info.plist
+      path: Extensions/Safari/Info.plist
       properties:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.Safari.web-extension
@@ -95,7 +98,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.macdownloadmanager.app.safari-extension
         PRODUCT_NAME: Safari Extension
-        CODE_SIGN_ENTITLEMENTS: SafariExtension/SafariExtension.entitlements
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        CODE_SIGN_ENTITLEMENTS: Extensions/Safari/SafariExtension.entitlements
         CODE_SIGN_IDENTITY: "-"
         GENERATE_INFOPLIST_FILE: false
 

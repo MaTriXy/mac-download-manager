@@ -57,6 +57,7 @@ final class AddDownloadViewModel {
     private let repository: any DownloadRepository
     private let aria2: any DownloadManagingAria2
     private let settings: SettingsViewModel
+    private let notificationService: NotificationService
     private let diskSpaceProvider: any DiskSpaceProviding
     private let fileManager: FileManager
 
@@ -71,6 +72,7 @@ final class AddDownloadViewModel {
         repository: any DownloadRepository,
         aria2: any DownloadManagingAria2,
         settings: SettingsViewModel,
+        notificationService: NotificationService = .shared,
         diskSpaceProvider: any DiskSpaceProviding = SystemDiskSpaceProvider(),
         fileManager: FileManager = .default
     ) {
@@ -78,6 +80,7 @@ final class AddDownloadViewModel {
         self.repository = repository
         self.aria2 = aria2
         self.settings = settings
+        self.notificationService = notificationService
         self.diskSpaceProvider = diskSpaceProvider
         self.fileManager = fileManager
     }
@@ -162,6 +165,7 @@ final class AddDownloadViewModel {
             )
 
             try await repository.save(record)
+            notificationService.postDownloadStarted(filename: filename)
         } catch {}
 
         resetState()
@@ -201,9 +205,14 @@ final class AddDownloadViewModel {
             )
 
             try await repository.save(record)
+            notificationService.postDownloadStarted(filename: sanitizedFilename)
         } catch {}
 
         resetState()
+    }
+
+    func prefill(url: String) {
+        urlText = url
     }
 
     func addBrowsedDirectory(_ path: String) {

@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        container.notificationService.requestAuthorization()
         startAria2()
         startSocketServer()
         registerNativeMessagingManifest()
@@ -85,48 +86,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleNativeMessage(_ message: NativeMessage) async -> NativeResponse {
-        guard let url = URL(string: message.url) else {
+        guard URL(string: message.url) != nil else {
             return NativeResponse(accepted: false, error: "Invalid URL", activeCount: nil)
         }
 
-        var headers = message.headers ?? [:]
-        if let referrer = message.referrer, !referrer.isEmpty {
-            headers["Referer"] = referrer
+        container.pendingExtensionDownload = PendingExtensionDownload(id: UUID(), message: message)
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let window = NSApp.windows.first(where: { $0.title == "Mac Download Manager" }) ?? NSApp.windows.first(where: { !$0.isMiniaturized }) {
+            window.makeKeyAndOrderFront(nil)
         }
 
-        let filename = message.filename ?? url.suggestedFilename
-        let downloadDir = URL.downloadsDirectory.path(percentEncoded: false)
-
-        do {
-            let gid = try await container.aria2Client.addDownload(
-                url: url,
-                headers: headers,
-                dir: downloadDir,
-                segments: 16,
-                outputFileName: filename
-            )
-
-            var headersJSON: String?
-            if !headers.isEmpty, let data = try? JSONEncoder().encode(headers) {
-                headersJSON = String(data: data, encoding: .utf8)
-            }
-
-            let record = DownloadRecord(
-                url: url.absoluteString,
-                filename: filename,
-                fileSize: message.fileSize,
-                status: DownloadStatus.downloading.rawValue,
-                segments: 16,
-                headersJSON: headersJSON,
-                filePath: downloadDir,
-                aria2Gid: gid
-            )
-
-            try await container.repository.save(record)
-            return NativeResponse(accepted: true, error: nil, activeCount: container.activeDownloadCount)
-        } catch {
-            return NativeResponse(accepted: false, error: error.localizedDescription, activeCount: nil)
-        }
+        return NativeResponse(accepted: true, error: nil, activeCount: container.activeDownloadCount)
     }
 
     private func registerNativeMessagingManifest() {

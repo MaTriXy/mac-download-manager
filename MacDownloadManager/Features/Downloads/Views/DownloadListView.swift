@@ -45,7 +45,7 @@ struct DownloadListView: View {
             }
         }
         .onChange(of: viewModel?.isAddURLPresented) { oldValue, newValue in
-            if newValue == true, oldValue != true {
+            if newValue == true, oldValue != true, addDownloadViewModel == nil {
                 addDownloadViewModel = AddDownloadViewModel(
                     metadataService: DefaultURLMetadataService(),
                     repository: container.repository,
@@ -57,6 +57,28 @@ struct DownloadListView: View {
                 addDownloadViewModel = nil
                 Task { await viewModel?.loadDownloads() }
             }
+        }
+        .onChange(of: container.pendingExtensionDownload) { _, newValue in
+            guard let pending = newValue else { return }
+            container.pendingExtensionDownload = nil
+
+            if viewModel?.isAddURLPresented == true {
+                viewModel?.isAddURLPresented = false
+                addDownloadViewModel?.cancel()
+                addDownloadViewModel = nil
+            }
+
+            let addVM = AddDownloadViewModel(
+                metadataService: DefaultURLMetadataService(),
+                repository: container.repository,
+                aria2: container.aria2Client,
+                settings: container.settingsViewModel
+            )
+            addVM.prefill(url: pending.message.url)
+            addDownloadViewModel = addVM
+            viewModel?.isAddURLPresented = true
+
+            Task { await addVM.submitURL() }
         }
         .alert(
             "Error",
