@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const SRC_DIR = join(ROOT, "Extension", "src");
-const FIREFOX_SRC_DIR = join(ROOT, "Extension", "src", "firefox");
-const ICONS_DIR = join(ROOT, "Extension", "icons");
+const SRC_DIR = join(ROOT, "Extensions", "Shared");
+const FIREFOX_SRC_DIR = join(ROOT, "Extensions", "Shared", "firefox");
+const ICONS_DIR = join(ROOT, "Extensions", "Shared", "icons");
 const DIST_DIR = join(ROOT, "dist");
 
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
