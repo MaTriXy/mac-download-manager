@@ -3,8 +3,6 @@ import Testing
 
 @testable import Mac_Download_Manager
 
-// MARK: - Mock URLMetadataService
-
 private actor MockURLMetadataService: URLMetadataService {
     private var result: URLMetadata
     private var delay: Duration?
@@ -36,8 +34,6 @@ private actor MockURLMetadataService: URLMetadataService {
     }
 }
 
-// MARK: - Disk Space Provider
-
 private struct FixedDiskSpaceProvider: DiskSpaceProviding {
     var availableSpace: Int64?
 
@@ -45,8 +41,6 @@ private struct FixedDiskSpaceProvider: DiskSpaceProviding {
         availableSpace
     }
 }
-
-// MARK: - Tests
 
 @Suite("AddDownloadViewModel")
 struct AddDownloadViewModelTests {
@@ -77,8 +71,6 @@ struct AddDownloadViewModelTests {
         return (vm, repo, aria)
     }
 
-    // MARK: - Initial state & URL validation
-
     @Test @MainActor
     func initialStateIsIdleWithEmptyURL() {
         let (vm, _, _) = makeViewModel()
@@ -104,8 +96,6 @@ struct AddDownloadViewModelTests {
         #expect(vm.isOKEnabled == false)
     }
 
-    // MARK: - Whitespace trimming
-
     @Test @MainActor
     func trimmedURLUsedForDuplicateLookup() async {
         let repo = InMemoryDownloadRepository()
@@ -127,8 +117,6 @@ struct AddDownloadViewModelTests {
             return
         }
     }
-
-    // MARK: - Cancel
 
     @Test @MainActor
     func cancelDuringQueryingReturnsToIdle() async {
@@ -182,8 +170,6 @@ struct AddDownloadViewModelTests {
         task.cancel()
     }
 
-    // MARK: - New download transition
-
     @Test @MainActor
     func queryingTransitionsToNewDownload() async {
         let metaService = MockURLMetadataService(filename: "downloaded.zip", fileSize: 2048)
@@ -200,8 +186,6 @@ struct AddDownloadViewModelTests {
         #expect(metadata.fileSize == 2048)
         #expect(vm.editableFilename == "downloaded.zip")
     }
-
-    // MARK: - Duplicate detection
 
     @Test @MainActor
     func queryingTransitionsToDuplicateFound() async {
@@ -249,8 +233,6 @@ struct AddDownloadViewModelTests {
         let count = await metaService.getFetchCount()
         #expect(count == 1)
     }
-
-    // MARK: - Skip & force-download from duplicate
 
     @Test @MainActor
     func skipClearsStateWithoutCreatingDownload() async {
@@ -320,8 +302,6 @@ struct AddDownloadViewModelTests {
         #expect(original?.status == DownloadStatus.completed.rawValue)
     }
 
-    // MARK: - Start download
-
     @Test @MainActor
     func downloadInitiatesAria2AndSavesRecord() async throws {
         let tmpDir = NSTemporaryDirectory()
@@ -384,8 +364,6 @@ struct AddDownloadViewModelTests {
         #expect(saved.filename == "renamed.zip")
     }
 
-    // MARK: - Default directory
-
     @Test @MainActor
     func fallsBackToDownloadsDirectoryWhenSettingsPathDoesNotExist() async {
         let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
@@ -401,8 +379,6 @@ struct AddDownloadViewModelTests {
         #expect(vm.selectedDirectory == expectedDir)
     }
 
-    // MARK: - Filename sanitization
-
     @Test @MainActor
     func filenameWithPathTraversalDisablesDownload() async {
         let metaService = MockURLMetadataService(filename: "file.zip", fileSize: 1024)
@@ -413,8 +389,6 @@ struct AddDownloadViewModelTests {
         vm.editableFilename = "../../../etc/passwd"
         #expect(vm.isDownloadEnabled == false)
     }
-
-    // MARK: - Settings
 
     @Test @MainActor
     func downloadUsesDefaultSegmentsFromSettings() async throws {
@@ -441,8 +415,6 @@ struct AddDownloadViewModelTests {
         let call = try #require(addCalls.first)
         #expect(call.segments == 16)
     }
-
-    // MARK: - Intercepted message
 
     @Test @MainActor
     func startDownloadPassesInterceptedHeaders() async throws {

@@ -3,8 +3,6 @@ import Testing
 
 @testable import Mac_Download_Manager
 
-// MARK: - Mock HTTP Head Client
-
 private struct MockHTTPHeadClient: HTTPHeadClient {
     var result: @Sendable (URL, TimeInterval) throws -> (httpResponse: HTTPURLResponse, data: Data)
 
@@ -44,12 +42,8 @@ private final class CapturedValues: @unchecked Sendable {
     var timeout: TimeInterval?
 }
 
-// MARK: - Tests
-
 @Suite("URLMetadataService")
 struct URLMetadataServiceTests {
-
-    // MARK: Content-Disposition filename parsing
 
     @Test
     func parsesContentDispositionQuotedFilename() async {
@@ -75,8 +69,6 @@ struct URLMetadataServiceTests {
         #expect(metadata.filename == "preferred.pdf")
     }
 
-    // MARK: URL fallback
-
     @Test
     func fallsBackToURLFilenameWhenNoContentDisposition() async {
         let url = URL(string: "https://example.com/files/archive.zip")!
@@ -88,8 +80,6 @@ struct URLMetadataServiceTests {
         #expect(metadata.filename == "archive.zip")
         #expect(metadata.fileSize == 1024)
     }
-
-    // MARK: Content-Length parsing
 
     @Test
     func nilFileSizeForMissingContentLength() async {
@@ -111,8 +101,6 @@ struct URLMetadataServiceTests {
         #expect(metadata.fileSize == nil)
     }
 
-    // MARK: Error handling
-
     @Test
     func returnsFallbackOnNetworkError() async {
         let url = URL(string: "https://example.com/files/report.pdf")!
@@ -133,8 +121,6 @@ struct URLMetadataServiceTests {
         #expect(metadata.fileSize == nil)
     }
 
-    // MARK: Timeout configuration
-
     @Test
     func clientReceivesCorrectTimeout() async {
         let url = URL(string: "https://example.com/file.zip")!
@@ -147,8 +133,6 @@ struct URLMetadataServiceTests {
         _ = await service.fetchMetadata(for: url)
         #expect(captured.timeout == 10)
     }
-
-    // MARK: Filename sanitization
 
     @Test
     func sanitizesPathTraversal() async {
@@ -185,8 +169,6 @@ struct URLMetadataServiceTests {
         let metadata = await service.fetchMetadata(for: url)
         #expect(metadata.filename == "download")
     }
-
-    // MARK: Malformed Content-Disposition
 
     @Test
     func handlesContentDispositionWithEmptyFilenameParameter() async {

@@ -17,8 +17,6 @@ struct SystemDiskSpaceProvider: DiskSpaceProviding {
 @Observable @MainActor
 final class AddDownloadViewModel {
 
-    // MARK: - State
-
     enum State: Sendable {
         case idle
         case querying
@@ -51,8 +49,6 @@ final class AddDownloadViewModel {
             && fileManager.isWritableFile(atPath: selectedDirectory)
     }
 
-    // MARK: - Dependencies
-
     private let metadataService: any URLMetadataService
     private let repository: any DownloadRepository
     private let aria2: any DownloadManagingAria2
@@ -65,8 +61,6 @@ final class AddDownloadViewModel {
     private var resolvedMetadata: URLMetadata?
     private var trimmedURLString: String = ""
     private var interceptedMessage: NativeMessage?
-
-    // MARK: - Init
 
     init(
         metadataService: any URLMetadataService,
@@ -85,8 +79,6 @@ final class AddDownloadViewModel {
         self.diskSpaceProvider = diskSpaceProvider
         self.fileManager = fileManager
     }
-
-    // MARK: - Actions
 
     func submitURL() async {
         guard case .idle = state else { return }
@@ -256,8 +248,6 @@ final class AddDownloadViewModel {
         }
         selectedDirectory = path
     }
-
-    // MARK: - Private
 
     private func resetState() {
         state = .idle
