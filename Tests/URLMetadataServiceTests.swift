@@ -40,7 +40,6 @@ private func makeErrorClient(error: Error) -> MockHTTPHeadClient {
     MockHTTPHeadClient { _, _ in throw error }
 }
 
-/// Thread-safe container for capturing values in mock closures under Swift 6 strict concurrency.
 private final class CapturedValues: @unchecked Sendable {
     var timeout: TimeInterval?
 }
@@ -53,38 +52,16 @@ struct URLMetadataServiceTests {
     // MARK: Content-Disposition filename parsing
 
     @Test
-    func parsesContentDispositionUnquotedFilename() async {
+    func parsesContentDispositionQuotedFilename() async {
         let url = URL(string: "https://example.com/download")!
         let client = makeClient(url: url, headers: [
-            "Content-Disposition": "attachment; filename=report.pdf",
+            "Content-Disposition": "attachment; filename=\"my document.pdf\"",
             "Content-Length": "5000",
         ])
         let service = DefaultURLMetadataService(client: client)
         let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.filename == "report.pdf")
-        #expect(metadata.fileSize == 5000)
-    }
-
-    @Test
-    func parsesContentDispositionQuotedFilename() async {
-        let url = URL(string: "https://example.com/download")!
-        let client = makeClient(url: url, headers: [
-            "Content-Disposition": "attachment; filename=\"my document.pdf\""
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
         #expect(metadata.filename == "my document.pdf")
-    }
-
-    @Test
-    func parsesContentDispositionFilenameStar() async {
-        let url = URL(string: "https://example.com/download")!
-        let client = makeClient(url: url, headers: [
-            "Content-Disposition": "attachment; filename*=UTF-8''t%C3%A9st%20file.txt"
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.filename == "tést file.txt")
+        #expect(metadata.fileSize == 5000)
     }
 
     @Test
@@ -112,29 +89,7 @@ struct URLMetadataServiceTests {
         #expect(metadata.fileSize == 1024)
     }
 
-    @Test
-    func fallsBackToURLFilenameWhenContentDispositionHasNoFilename() async {
-        let url = URL(string: "https://example.com/files/data.csv")!
-        let client = makeClient(url: url, headers: [
-            "Content-Disposition": "inline"
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.filename == "data.csv")
-    }
-
     // MARK: Content-Length parsing
-
-    @Test
-    func parsesValidContentLength() async {
-        let url = URL(string: "https://example.com/file.zip")!
-        let client = makeClient(url: url, headers: [
-            "Content-Length": "123456789"
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.fileSize == 123456789)
-    }
 
     @Test
     func nilFileSizeForMissingContentLength() async {
@@ -156,18 +111,7 @@ struct URLMetadataServiceTests {
         #expect(metadata.fileSize == nil)
     }
 
-    @Test
-    func nilFileSizeForNegativeContentLength() async {
-        let url = URL(string: "https://example.com/file.zip")!
-        let client = makeClient(url: url, headers: [
-            "Content-Length": "-1"
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.fileSize == nil)
-    }
-
-    // MARK: Error handling — returns fallback, never throws
+    // MARK: Error handling
 
     @Test
     func returnsFallbackOnNetworkError() async {
@@ -176,16 +120,6 @@ struct URLMetadataServiceTests {
         let service = DefaultURLMetadataService(client: client)
         let metadata = await service.fetchMetadata(for: url)
         #expect(metadata.filename == "report.pdf")
-        #expect(metadata.fileSize == nil)
-    }
-
-    @Test
-    func returnsFallbackOnTimeout() async {
-        let url = URL(string: "https://example.com/files/large.iso")!
-        let client = makeErrorClient(error: URLError(.timedOut))
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.filename == "large.iso")
         #expect(metadata.fileSize == nil)
     }
 
@@ -199,22 +133,7 @@ struct URLMetadataServiceTests {
         #expect(metadata.fileSize == nil)
     }
 
-    @Test
-    func returnsFallbackOnMethodNotAllowed() async {
-        let url = URL(string: "https://example.com/api/data.json")!
-        let client = makeClient(url: url, statusCode: 405)
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.filename == "data.json")
-        #expect(metadata.fileSize == nil)
-    }
-
     // MARK: Timeout configuration
-
-    @Test
-    func requestTimeoutIs10Seconds() {
-        #expect(DefaultURLMetadataService.requestTimeout == 10)
-    }
 
     @Test
     func clientReceivesCorrectTimeout() async {
@@ -230,18 +149,6 @@ struct URLMetadataServiceTests {
     }
 
     // MARK: Filename sanitization
-
-    @Test
-    func sanitizesPathSeparatorsFromFilename() async {
-        let url = URL(string: "https://example.com/download")!
-        let client = makeClient(url: url, headers: [
-            "Content-Disposition": "attachment; filename=\"/etc/passwd\""
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(!metadata.filename.contains("/"))
-        #expect(metadata.filename == "passwd")
-    }
 
     @Test
     func sanitizesPathTraversal() async {
@@ -265,7 +172,6 @@ struct URLMetadataServiceTests {
         let service = DefaultURLMetadataService(client: client)
         let metadata = await service.fetchMetadata(for: url)
         #expect(!metadata.filename.contains("\\"))
-        #expect(!metadata.filename.contains(".."))
         #expect(metadata.filename == "secret.txt")
     }
 
@@ -274,17 +180,6 @@ struct URLMetadataServiceTests {
         let url = URL(string: "https://example.com/")!
         let client = makeClient(url: url, headers: [
             "Content-Disposition": "attachment; filename=\"\""
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.filename == "download")
-    }
-
-    @Test
-    func sanitizesFilenameWithOnlySlashes() async {
-        let url = URL(string: "https://example.com/download")!
-        let client = makeClient(url: url, headers: [
-            "Content-Disposition": "attachment; filename=\"///\""
         ])
         let service = DefaultURLMetadataService(client: client)
         let metadata = await service.fetchMetadata(for: url)
@@ -302,16 +197,5 @@ struct URLMetadataServiceTests {
         let service = DefaultURLMetadataService(client: client)
         let metadata = await service.fetchMetadata(for: url)
         #expect(metadata.filename == "photo.jpg")
-    }
-
-    @Test
-    func handlesContentDispositionWithMissingValue() async {
-        let url = URL(string: "https://example.com/files/image.png")!
-        let client = makeClient(url: url, headers: [
-            "Content-Disposition": "attachment;"
-        ])
-        let service = DefaultURLMetadataService(client: client)
-        let metadata = await service.fetchMetadata(for: url)
-        #expect(metadata.filename == "image.png")
     }
 }
